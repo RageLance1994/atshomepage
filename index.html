@@ -860,7 +860,7 @@ document.querySelectorAll('button').forEach(btn => {
 
   const threeScene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, iW / iH, 0.1, 1000);
-  camera.position.z = isMob() ? 120 : 140;
+  camera.position.z = isMob() ? 155 : 140;
 
   canvas.style.height = isMob() ? '50%' : '100%';
   canvas.style.bottom = 'auto';
@@ -901,6 +901,35 @@ document.querySelectorAll('button').forEach(btn => {
   });
   const ptCloud = new THREE.Points(geo, mat);
   threeScene.add(ptCloud);
+
+  // ── Ambient flow particles (desktop only) ─────────────────────
+  const AM = 650;
+  let ambCloud = null, ambPosAttr2 = null, ambPos2 = null, ambVel2 = null;
+  if (!isMob()) {
+    ambPos2 = new Float32Array(AM * 3);
+    ambVel2 = new Float32Array(AM * 3);
+    for (let i = 0; i < AM; i++) {
+      ambPos2[i*3]   = (Math.random() - 0.5) * 310;
+      ambPos2[i*3+1] = (Math.random() - 0.5) * 160;
+      ambPos2[i*3+2] = (Math.random() - 0.5) * 55;
+      ambVel2[i*3]   = 0.03 + Math.random() * 0.09;
+      ambVel2[i*3+1] = (Math.random() - 0.5) * 0.022;
+    }
+    const ambGeo2 = new THREE.BufferGeometry();
+    ambPosAttr2 = new THREE.BufferAttribute(ambPos2, 3);
+    ambGeo2.setAttribute('position', ambPosAttr2);
+    const ambMat2 = new THREE.PointsMaterial({
+      size: 1.35,
+      map: glowTex,
+      transparent: true,
+      opacity: 0.19,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+    ambCloud = new THREE.Points(ambGeo2, ambMat2);
+    threeScene.add(ambCloud);
+  }
 
   // ── Shape helpers ─────────────────────────────────────────────
   function ln(x1, y1, x2, y2, n) {
@@ -1085,7 +1114,7 @@ document.querySelectorAll('button').forEach(btn => {
   // ── Animation loop ────────────────────────────────────────────
   let targetBuf  = targets[0];
   let lastScene  = -1;
-  let cRotY = 0, rotDir = 1, cScale = 1, cPosX = 0;
+  let cRotY = 0, cScale = 1, cPosX = 0;
 
   (function tick() {
     requestAnimationFrame(tick);
@@ -1099,14 +1128,13 @@ document.querySelectorAll('button').forEach(btn => {
     for (let i = 0; i < N * 3; i++) posArr[i] += (targetBuf[i] - posArr[i]) * 0.065;
     posAttr.needsUpdate = true;
 
-    // Ambient slow Y oscillation
-    cRotY += 0.0018 * rotDir;
-    if (Math.abs(cRotY) > 0.12) rotDir *= -1;
+    // Continuous slow rotation — no rocking, no clipping
+    cRotY += 0.0025;
     ptCloud.rotation.y = cRotY;
     ptCloud.rotation.x = 0.06;
 
     // Gentle scale with scroll
-    const tScale = 0.93 + scrollP * 0.12;
+    const tScale = isMob() ? 0.70 + scrollP * 0.08 : 0.93 + scrollP * 0.12;
     cScale += (tScale - cScale) * 0.05;
     ptCloud.scale.setScalar(cScale);
 
@@ -1115,13 +1143,35 @@ document.querySelectorAll('button').forEach(btn => {
     cPosX += (tPosX - cPosX) * 0.055;
     ptCloud.position.x = cPosX;
 
+    // Update ambient flow particles
+    if (ambCloud && ambPos2 && ambVel2) {
+      const cx = cPosX; // shape centroid X
+      for (let i = 0; i < AM; i++) {
+        ambPos2[i*3]   += ambVel2[i*3];
+        ambPos2[i*3+1] += ambVel2[i*3+1];
+        // Weak pull toward shape center
+        ambVel2[i*3] += (cx - ambPos2[i*3]) * 0.000055;
+        ambVel2[i*3] = Math.max(0.015, Math.min(0.17, ambVel2[i*3]));
+        // Wrap: reenter from left when past right edge
+        if (ambPos2[i*3] > 160) {
+          ambPos2[i*3]   = -160;
+          ambPos2[i*3+1] = (Math.random() - 0.5) * 160;
+          ambPos2[i*3+2] = (Math.random() - 0.5) * 55;
+          ambVel2[i*3]   = 0.03 + Math.random() * 0.09;
+          ambVel2[i*3+1] = (Math.random() - 0.5) * 0.022;
+        }
+      }
+      ambPosAttr2.needsUpdate = true;
+      ambCloud.rotation.y = cRotY * 0.22; // gentle co-rotation
+    }
+
     renderer.render(threeScene, camera);
   })();
 
   window.addEventListener('resize', () => {
     const { w, h } = getSize();
     camera.aspect = w / h;
-    camera.position.z = isMob() ? 120 : 140;
+    camera.position.z = isMob() ? 155 : 140;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     canvas.style.height = isMob() ? '50%' : '100%';
