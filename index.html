@@ -59,6 +59,11 @@ nav{
   display:flex;align-items:center;justify-content:center;overflow:hidden;
   background:radial-gradient(ellipse 80% 60% at 50% 50%,rgba(100,31,251,0.08) 0%,transparent 70%);
 }
+#hero::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:220px;
+  background:linear-gradient(to bottom,transparent 0%,var(--bg) 100%);
+  pointer-events:none;z-index:4;
+}
 #neural-canvas{position:absolute;inset:0;width:100%;height:100%}
 .hero-content{
   position:relative;z-index:2;text-align:center;
@@ -234,10 +239,10 @@ footer a:hover{color:var(--p2)}
 .reveal-delay-3{transition-delay:.26s}
 
 /* ─── SCROLL JOURNEY ─── */
-#scroll-journey{height:900vh;position:relative}
+#scroll-journey{height:900vh;position:relative;width:100vw;left:50%;transform:translateX(-50%)}
 #journey-sticky{
   position:sticky;top:0;height:100vh;overflow:hidden;
-  display:flex;align-items:center;
+  display:flex;align-items:center;width:100vw;
   background:radial-gradient(ellipse 70% 70% at 50% 50%,rgba(100,31,251,0.05),transparent);
 }
 #brain-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -255,7 +260,7 @@ footer a:hover{color:var(--p2)}
 .svc-panel.panel-center.active{transform:translateX(-50%) translateY(-50%)}
 .panel-num{
   font-size:5.5rem;font-weight:900;line-height:1;letter-spacing:-.04em;
-  color:rgba(100,31,251,0.16);margin-bottom:.1rem;font-variant-numeric:tabular-nums;
+  color:rgba(160,100,255,0.55);margin-bottom:.1rem;font-variant-numeric:tabular-nums;
 }
 .panel-eyebrow{font-size:.78rem;letter-spacing:.22em;text-transform:uppercase;color:var(--p2);margin-bottom:1rem}
 .panel-title{
@@ -857,13 +862,14 @@ document.querySelectorAll('button').forEach(btn => {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const { w: iW, h: iH } = getSize();
   renderer.setSize(iW, iH);
+  // Override Three.js inline px values so the canvas always fills 100% of its container
+  canvas.style.width  = '100%';
+  canvas.style.height = isMob() ? '50%' : '100%';
+  canvas.style.bottom = 'auto';
 
   const threeScene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, iW / iH, 0.1, 1000);
   camera.position.z = isMob() ? 155 : 140;
-
-  canvas.style.height = isMob() ? '50%' : '100%';
-  canvas.style.bottom = 'auto';
 
   const N = isMob() ? 1800 : 3200;
 
@@ -891,45 +897,27 @@ document.querySelectorAll('button').forEach(btn => {
   const posAttr = new THREE.BufferAttribute(posArr, 3);
   geo.setAttribute('position', posAttr);
 
+  // Per-particle phase offsets for silk flow
+  const phX = new Float32Array(N), phY = new Float32Array(N);
+  for (let i = 0; i < N; i++) { phX[i] = Math.random() * 6.283; phY[i] = Math.random() * 6.283; }
+
+  // Per-particle color (brightness) buffer for star twinkling
+  const colArr = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) { colArr[i*3] = colArr[i*3+1] = colArr[i*3+2] = 1; }
+  const colAttr = new THREE.BufferAttribute(colArr, 3);
+  geo.setAttribute('color', colAttr);
+
   const mat = new THREE.PointsMaterial({
-    size: isMob() ? 2.3 : 1.9,
+    size: isMob() ? 3.0 : 2.4,
     map: glowTex,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     sizeAttenuation: true,
+    vertexColors: true,
   });
   const ptCloud = new THREE.Points(geo, mat);
   threeScene.add(ptCloud);
-
-  // ── Ambient flow particles (desktop only) ─────────────────────
-  const AM = 650;
-  let ambCloud = null, ambPosAttr2 = null, ambPos2 = null, ambVel2 = null;
-  if (!isMob()) {
-    ambPos2 = new Float32Array(AM * 3);
-    ambVel2 = new Float32Array(AM * 3);
-    for (let i = 0; i < AM; i++) {
-      ambPos2[i*3]   = (Math.random() - 0.5) * 310;
-      ambPos2[i*3+1] = (Math.random() - 0.5) * 160;
-      ambPos2[i*3+2] = (Math.random() - 0.5) * 55;
-      ambVel2[i*3]   = 0.03 + Math.random() * 0.09;
-      ambVel2[i*3+1] = (Math.random() - 0.5) * 0.022;
-    }
-    const ambGeo2 = new THREE.BufferGeometry();
-    ambPosAttr2 = new THREE.BufferAttribute(ambPos2, 3);
-    ambGeo2.setAttribute('position', ambPosAttr2);
-    const ambMat2 = new THREE.PointsMaterial({
-      size: 1.35,
-      map: glowTex,
-      transparent: true,
-      opacity: 0.19,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      sizeAttenuation: true,
-    });
-    ambCloud = new THREE.Points(ambGeo2, ambMat2);
-    threeScene.add(ambCloud);
-  }
 
   // ── Shape helpers ─────────────────────────────────────────────
   function ln(x1, y1, x2, y2, n) {
@@ -1051,19 +1039,12 @@ document.querySelectorAll('button').forEach(btn => {
   // 5 · Infrastrutture Cloud — cloud ☁️
   function s5() {
     const a = [];
-    a.push(...arc(-18,4,18,18,Math.PI*.25,Math.PI*1.75,180));
-    a.push(...arc(2,11,24,24,Math.PI*.10,Math.PI*.90,200));
-    a.push(...arc(22,2,17,17,Math.PI*.25,Math.PI*1.75,160));
-    a.push(...ln(-34,-14,34,-14,240));
-    a.push(...ln(-34,-14,-36,4,60), ...ln(34,-14,36,4,60));
-    for (let i = 0; i < 700; i++) {
-      const x=(Math.random()-.5)*72, y=(Math.random()-.5)*38+2;
-      const inside = (Math.pow(x+18,2)+Math.pow(y-4,2)<324) ||
-                     (Math.pow(x-2,2)+Math.pow(y-11,2)<576) ||
-                     (Math.pow(x-22,2)+Math.pow(y-2,2)<289) ||
-                     (y<-10 && Math.abs(x)<34);
-      if (inside) a.push([x,y,0]);
-    }
+    // arc(0 → π) = top-half semicircle = bump pointing UP
+    a.push(...arc(-20, -2, 13, 13, 0, Math.PI, 155));   // left bump
+    a.push(...arc(  0,  7, 20, 20, 0, Math.PI, 220));   // center (tallest)
+    a.push(...arc( 20, -2, 14, 14, 0, Math.PI, 165));   // right bump
+    // Flat base connecting left edge to right edge
+    a.push(...ln(-33, -2, 34, -2, 280));
     return a;
   }
 
@@ -1079,42 +1060,47 @@ document.querySelectorAll('button').forEach(btn => {
     return a;
   }
 
-  // 7 · Agenti AI — robot head 🤖
+  // 7 · Agenti AI — robot head 🤖  (modern octagonal, clean)
   function s7() {
     const a = [];
-    // Head
-    a.push(...ln(-26,28,26,28,220), ...ln(-26,-22,26,-22,220),
-            ...ln(-26,-22,-26,28,200), ...ln(26,-22,26,28,200));
-    // Forehead plate
-    a.push(...ln(-26,18,26,18,180));
+    const W=26, H=30, C=7;  // half-W, half-H, chamfer
+    // Octagonal head: 4 straight edges + 4 chamfered corners
+    a.push(...ln(-W+C, H,   W-C,  H,  170));   // top
+    a.push(...ln(-W+C,-H,   W-C, -H,  170));   // bottom
+    a.push(...ln(-W,  H-C, -W,  -H+C, 160));   // left
+    a.push(...ln( W,  H-C,  W,  -H+C, 160));   // right
+    a.push(...ln(-W+C, H,  -W,  H-C,  40));    // TL chamfer
+    a.push(...ln( W-C, H,   W,  H-C,  40));    // TR chamfer
+    a.push(...ln(-W+C,-H,  -W, -H+C,  40));    // BL chamfer
+    a.push(...ln( W-C,-H,   W, -H+C,  40));    // BR chamfer
+    // Eyes: circles + filled pupils
+    a.push(...arc(-11, 5, 9, 9, 0, Math.PI*2, 110));
+    a.push(...arc( 11, 5, 9, 9, 0, Math.PI*2, 110));
+    a.push(...dot(-11, 5, 4, 55));
+    a.push(...dot( 11, 5, 4, 55));
+    // Mouth: slight smile arc
+    a.push(...arc(0, -10, 11, 6, Math.PI*1.1, Math.PI*1.9, 90));
     // Antenna
-    a.push(...ln(0,28,0,40,70), ...arc(0,42,3.5,3.5,0,Math.PI*2,55));
-    // Neck
-    a.push(...ln(-10,-22,-10,-34,70), ...ln(10,-22,10,-34,70), ...ln(-10,-34,10,-34,60));
-    // Left eye
-    a.push(...ln(-24,-2,-8,-2,100), ...ln(-24,14,-8,14,100),
-            ...ln(-24,-2,-24,14,80), ...ln(-8,-2,-8,14,80), ...dot(-16,6,8,120));
-    // Right eye
-    a.push(...ln(8,-2,24,-2,100), ...ln(8,14,24,14,100),
-            ...ln(8,-2,8,14,80), ...ln(24,-2,24,14,80), ...dot(16,6,8,120));
-    // Mouth grille
-    for (let m = 0; m < 3; m++) a.push(...ln(-18,-8-m*4,18,-8-m*4,100));
-    // Side bolts
-    a.push(...arc(-26,4,3,3,0,Math.PI*2,45), ...arc(26,4,3,3,0,Math.PI*2,45));
+    a.push(...ln(0, H, 0, H+13, 65));
+    a.push(...arc(0, H+15, 3.5, 3.5, 0, Math.PI*2, 50));
     return a;
   }
 
   // Pre-compute all targets
   const targets = [s0,s1,s2,s3,s4,s5,s6,s7].map(fn => buildTarget(fn()));
 
-  // Init to scatter
-  for (let i = 0; i < N*3; i++) posArr[i] = targets[0][i];
+  // Init: spread across canvas so silk flow is visible immediately
+  for (let i = 0; i < N; i++) {
+    posArr[i*3]   = (Math.random() - 0.5) * 300;
+    posArr[i*3+1] = (Math.random() - 0.5) * 120;
+    posArr[i*3+2] = (Math.random() - 0.5) * 18;
+  }
   posAttr.needsUpdate = true;
 
   // ── Animation loop ────────────────────────────────────────────
   let targetBuf  = targets[0];
   let lastScene  = -1;
-  let cRotY = 0, cScale = 1, cPosX = 0;
+  let tOff = 0, cScale = 1, cPosX = 0;
 
   (function tick() {
     requestAnimationFrame(tick);
@@ -1124,46 +1110,60 @@ document.querySelectorAll('button').forEach(btn => {
     const sceneIdx = Math.min(Math.floor(scrollP * 8), 7);
     if (sceneIdx !== lastScene) { lastScene = sceneIdx; targetBuf = targets[sceneIdx]; }
 
-    // Lerp all particles toward target (sand-flow effect)
-    for (let i = 0; i < N * 3; i++) posArr[i] += (targetBuf[i] - posArr[i]) * 0.065;
+    // Particle physics: panel 0 → tight vortex; panels 1-7 → PS3 silk-flow + magnetic
+    tOff += 0.013;
+    for (let i = 0; i < N; i++) {
+      const ii = i * 3;
+      const px = posArr[ii], py = posArr[ii+1];
+
+      if (sceneIdx === 0) {
+        // ── VORTEX: particles swirl in a tight CW ring, ~radius 42 ──
+        const dist = Math.sqrt(px*px + py*py) || 0.001;
+        // Inward radial unit vector
+        const rx = -px / dist, ry = -py / dist;
+        // CW tangent: (y/r, -x/r)
+        const tgx = py / dist, tgy = -px / dist;
+        // Radial spring: pulls toward orbit radius 42
+        const targetR = 42;
+        const radialF = (dist - targetR) * 0.03;
+        // Tangential speed with per-particle variation
+        const tangS = 0.58 + Math.sin(tOff * 0.35 + phX[i]) * 0.16;
+        posArr[ii]   += rx * radialF + tgx * tangS;
+        posArr[ii+1] += ry * radialF + tgy * tangS;
+        posArr[ii+2] += (0 - posArr[ii+2]) * 0.05;
+      } else {
+        // ── SILK FLOW + MAGNETIC ──
+        const tx = targetBuf[ii], ty = targetBuf[ii+1], tz = targetBuf[ii+2];
+        // Silk flow: steady rightward drift + sinusoidal Y undulation per particle
+        const vfx = 0.58 + Math.sin(py * 0.055 + tOff * 0.4  + phX[i]) * 0.30;
+        const vfy = Math.sin(tOff * 0.27 + phY[i]) * 0.07 +
+                    Math.cos(px * 0.021 + tOff * 0.19) * 0.03;
+        // Magnetic pull: inversely proportional to distance squared
+        const dx = tx - px, dy = ty - py;
+        const mag = 1.0 / (1.0 + (dx*dx + dy*dy) * 0.0032);
+        // Blend: pure flow when far, pure magnetic when on target
+        posArr[ii]   += vfx * (1.0 - mag * 0.88) + dx * 0.075 * mag;
+        posArr[ii+1] += vfy * (1.0 - mag * 0.88) + dy * 0.075 * mag;
+        posArr[ii+2] += (tz - posArr[ii+2]) * 0.04;
+        // Wrap: particle exits right → reenter from left
+        if (posArr[ii] > 155) posArr[ii] -= 310;
+      }
+
+      // ── STAR TWINKLING: independent per-particle brightness oscillation ──
+      const b = 0.55 + Math.sin(tOff * 2.8 + phX[i] * 4.3) * 0.45;
+      colArr[ii] = colArr[ii+1] = colArr[ii+2] = b;
+    }
     posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
 
-    // Continuous slow rotation — no rocking, no clipping
-    cRotY += 0.0025;
-    ptCloud.rotation.y = cRotY;
-    ptCloud.rotation.x = 0.06;
-
-    // Gentle scale with scroll
+    // Cloud level: gentle scale + X offset, no rotation
     const tScale = isMob() ? 0.70 + scrollP * 0.08 : 0.93 + scrollP * 0.12;
     cScale += (tScale - cScale) * 0.05;
     ptCloud.scale.setScalar(cScale);
-
-    // X translation: keep particles away from text panel on desktop
     const tPosX = innerWidth >= 768 ? (window.brainTargetX || 0) : 0;
     cPosX += (tPosX - cPosX) * 0.055;
-    ptCloud.position.x = cPosX;
-
-    // Update ambient flow particles
-    if (ambCloud && ambPos2 && ambVel2) {
-      const cx = cPosX; // shape centroid X
-      for (let i = 0; i < AM; i++) {
-        ambPos2[i*3]   += ambVel2[i*3];
-        ambPos2[i*3+1] += ambVel2[i*3+1];
-        // Weak pull toward shape center
-        ambVel2[i*3] += (cx - ambPos2[i*3]) * 0.000055;
-        ambVel2[i*3] = Math.max(0.015, Math.min(0.17, ambVel2[i*3]));
-        // Wrap: reenter from left when past right edge
-        if (ambPos2[i*3] > 160) {
-          ambPos2[i*3]   = -160;
-          ambPos2[i*3+1] = (Math.random() - 0.5) * 160;
-          ambPos2[i*3+2] = (Math.random() - 0.5) * 55;
-          ambVel2[i*3]   = 0.03 + Math.random() * 0.09;
-          ambVel2[i*3+1] = (Math.random() - 0.5) * 0.022;
-        }
-      }
-      ambPosAttr2.needsUpdate = true;
-      ambCloud.rotation.y = cRotY * 0.22; // gentle co-rotation
-    }
+    ptCloud.position.set(cPosX, 0, 0);
+    ptCloud.rotation.set(0.04, 0, 0);
 
     renderer.render(threeScene, camera);
   })();
@@ -1174,6 +1174,7 @@ document.querySelectorAll('button').forEach(btn => {
     camera.position.z = isMob() ? 155 : 140;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    canvas.style.width  = '100%';
     canvas.style.height = isMob() ? '50%' : '100%';
   });
 })();
