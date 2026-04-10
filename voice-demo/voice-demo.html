@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATS — Agente AI Vocale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #020209;
+  --purple: #641ffb;
+  --purple2: #9b59fc;
+  --magenta: #c026d3;
+  --cyan: #06b6d4;
+  --white: #f0eeff;
+  --dim: rgba(240,238,255,0.45);
+  --glass: rgba(255,255,255,0.04);
+  --glass-b: rgba(255,255,255,0.09);
+  --r: 20px;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--white);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== CANVASES ===== */
+#bg-c { position: fixed; inset: 0; z-index: 0; }
+
+#orb-wrap {
+  position: fixed;
+  z-index: 1;
+  pointer-events: none;
+  transition: all 0.8s cubic-bezier(.4,0,.2,1);
+}
+#orb-wrap.hero {
+  width: 560px; height: 560px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+#orb-wrap.mini {
+  width: 180px; height: 180px;
+  bottom: 32px; left: 50%;
+  top: auto;
+  transform: translateX(-50%);
+}
+#orb-c { width: 100%; height: 100%; display: block; }
+
+/* ===== APP ===== */
+#app {
+  position: fixed; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ===== SCREENS ===== */
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 2rem 1.5rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.55s ease;
+  overflow-y: auto;
+}
+.screen.active { opacity: 1; pointer-events: all; }
+
+/* ===== WELCOME ===== */
+#s-welcome { gap: 1.6rem; text-align: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--purple2);
+  border: 1px solid rgba(155,89,252,0.4);
+  padding: 6px 16px; border-radius: 99px;
+  background: rgba(100,31,251,0.12);
+  animation: pulse-badge 3s ease-in-out infinite;
+}
+.badge::before {
+  content: '';
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--purple2);
+  box-shadow: 0 0 8px var(--purple2);
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+@keyframes pulse-badge {
+  0%,100%{box-shadow:0 0 0 0 rgba(100,31,251,0)}
+  50%{box-shadow:0 0 20px 4px rgba(100,31,251,0.25)}
+}
+
+.headline {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(4rem, 10vw, 7.5rem);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #fff 0%, #c4b4ff 40%, var(--magenta) 80%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: headline-in 1s cubic-bezier(.4,0,.2,1) both;
+  margin-top: -1rem;
+}
+@keyframes headline-in {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sub {
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  color: var(--dim);
+  line-height: 1.6;
+  max-width: 440px;
+  animation: headline-in 1s 0.2s cubic-bezier(.4,0,.2,1) both;
+}
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 18px 42px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--magenta));
+  border: none; border-radius: 99px;
+  cursor: pointer;
+  box-shadow: 0 0 40px rgba(100,31,251,0.5), 0 0 80px rgba(192,38,211,0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: headline-in 1s 0.4s cubic-bezier(.4,0,.2,1) both;
+}
+.btn-primary:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 0 60px rgba(100,31,251,0.7), 0 0 120px rgba(192,38,211,0.35);
+}
+.btn-primary svg { width: 22px; height: 22px; }
+
+/* ===== QUESTIONS ===== */
+#s-questions { gap: 0; justify-content: flex-end; padding-bottom: 40px; }
+
+#q-progress {
+  position: absolute;
+  top: 32px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 10px;
+  z-index: 10;
+}
+.q-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  transition: all 0.4s ease;
+}
+.q-dot.done { background: var(--purple2); box-shadow: 0 0 10px var(--purple); }
+.q-dot.active { background: #fff; transform: scale(1.3); box-shadow: 0 0 12px rgba(255,255,255,0.5); }
+
+#q-box {
+  width: 100%; max-width: 600px;
+  padding: 40px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: 28px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  animation: q-in 0.5s cubic-bezier(.4,0,.2,1) both;
+  margin-top: auto;
+}
+@keyframes q-in {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.q-number {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--purple2);
+  margin-bottom: 16px;
+}
+
+.q-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 28px;
+  color: var(--white);
+}
+
+.q-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem; color: var(--white);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  outline: none;
+  margin-bottom: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.q-input:focus {
+  border-color: var(--purple2);
+  box-shadow: 0 0 0 3px rgba(155,89,252,0.15);
+}
+.q-input::placeholder { color: rgba(240,238,255,0.3); }
+
+.q-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.q-chip {
+  padding: 10px 20px;
+  font-size: 0.9rem; font-weight: 500;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 99px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.04);
+  color: var(--dim);
+  transition: all 0.2s;
+  user-select: none;
+}
+.q-chip:hover { border-color: var(--purple2); color: var(--white); background: rgba(155,89,252,0.1); }
+.q-chip.sel {
+  border-color: var(--purple);
+  background: linear-gradient(135deg, rgba(100,31,251,0.3), rgba(192,38,211,0.2));
+  color: var(--white);
+  box-shadow: 0 0 16px rgba(100,31,251,0.35);
+}
+
+.q-large-btn {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 20px 24px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  cursor: pointer; color: var(--white);
+  font-size: 1rem; font-weight: 500;
+  margin-bottom: 10px;
+  text-align: left;
+  transition: all 0.2s;
+}
+.q-large-btn:hover { border-color: var(--purple2); background: rgba(155,89,252,0.1); }
+.q-large-btn.sel {
+  border-color: var(--purple);
+  background: linear-gradient(135deg, rgba(100,31,251,0.25), rgba(192,38,211,0.15));
+  box-shadow: 0 0 20px rgba(100,31,251,0.3);
+}
+.q-large-btn .icon { font-size: 1.4rem; }
+
+.q-textarea {
+  width: 100%; height: 100px;
+  padding: 14px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem; color: var(--white);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  outline: none; resize: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  margin-bottom: 8px;
+}
+.q-textarea:focus {
+  border-color: var(--purple2);
+  box-shadow: 0 0 0 3px rgba(155,89,252,0.15);
+}
+.q-textarea::placeholder { color: rgba(240,238,255,0.3); }
+
+.btn-next {
+  display: inline-flex; align-items: center; gap: 10px;
+  margin-top: 20px;
+  padding: 14px 34px;
+  font-size: 0.95rem; font-weight: 700; letter-spacing: 0.05em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--magenta));
+  border: none; border-radius: 99px;
+  cursor: pointer;
+  box-shadow: 0 0 30px rgba(100,31,251,0.4);
+  transition: transform 0.2s, opacity 0.2s;
+}
+.btn-next:hover { transform: translateY(-2px); }
+.btn-next:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* ===== BUILDING ===== */
+#s-building { gap: 2rem; text-align: center; }
+
+.build-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: 0.04em;
+}
+
+#prompt-preview {
+  max-width: 640px; width: 100%;
+  padding: 24px 28px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: rgba(180,220,255,0.7);
+  white-space: pre-wrap;
+  min-height: 180px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.build-status {
+  font-size: 0.85rem; color: var(--dim);
+  animation: pulse-text 1.5s ease-in-out infinite;
+}
+@keyframes pulse-text { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+/* ===== READY ===== */
+#s-ready { gap: 2rem; text-align: center; }
+
+.ready-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, var(--purple2) 60%, var(--magenta) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mic-guide {
+  display: flex; flex-direction: column; gap: 12px;
+  max-width: 420px; width: 100%;
+  padding: 24px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: var(--r);
+}
+.mic-step {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 0.9rem; color: var(--white);
+  opacity: 0;
+  animation: step-in 0.5s ease forwards;
+}
+.mic-step:nth-child(1){ animation-delay: 0.1s; }
+.mic-step:nth-child(2){ animation-delay: 0.3s; }
+.mic-step:nth-child(3){ animation-delay: 0.5s; }
+@keyframes step-in { to { opacity: 1; transform: none; } from { opacity: 0; transform: translateX(-12px); } }
+.mic-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; flex-shrink: 0;
+  background: rgba(100,31,251,0.2);
+  border: 1px solid rgba(100,31,251,0.35);
+}
+
+#btn-call {
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  width: 220px; height: 220px; border-radius: 50%;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.1rem; font-weight: 800; letter-spacing: 0.06em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--magenta) 100%);
+  border: none; cursor: pointer;
+  box-shadow:
+    0 0 60px rgba(100,31,251,0.6),
+    0 0 120px rgba(192,38,211,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: transform 0.3s, box-shadow 0.3s;
+  animation: call-pulse 2.5s ease-in-out infinite;
+}
+#btn-call:hover {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 80px rgba(100,31,251,0.8),
+    0 0 160px rgba(192,38,211,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+  animation: none;
+}
+#btn-call .call-ring {
+  position: absolute; inset: -16px;
+  border-radius: 50%;
+  border: 2px solid rgba(100,31,251,0.4);
+  animation: ring-expand 2.5s ease-in-out infinite;
+}
+#btn-call .call-ring2 {
+  position: absolute; inset: -32px;
+  border-radius: 50%;
+  border: 1px solid rgba(192,38,211,0.2);
+  animation: ring-expand 2.5s 0.6s ease-in-out infinite;
+}
+@keyframes call-pulse {
+  0%,100%{ box-shadow: 0 0 60px rgba(100,31,251,0.6), 0 0 120px rgba(192,38,211,0.3); }
+  50%{ box-shadow: 0 0 80px rgba(100,31,251,0.8), 0 0 160px rgba(192,38,211,0.45); }
+}
+@keyframes ring-expand {
+  0%{ transform: scale(1); opacity: 0.7; }
+  100%{ transform: scale(1.4); opacity: 0; }
+}
+
+/* ===== IN-CALL ===== */
+#s-call { gap: 1.5rem; justify-content: flex-end; padding-bottom: 32px; }
+
+.call-header {
+  position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+}
+#call-status-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 99px;
+  font-size: 0.85rem; font-weight: 500;
+  color: var(--dim);
+  transition: all 0.3s;
+}
+#call-status-badge .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #666;
+  transition: background 0.3s;
+}
+#call-status-badge.connected .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 1.5s infinite; }
+#call-status-badge.listening .dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: blink 0.8s infinite; }
+#call-status-badge.speaking .dot { background: var(--magenta); box-shadow: 0 0 8px var(--magenta); animation: blink 0.5s infinite; }
+
+#transcript {
+  width: 100%; max-width: 540px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155,89,252,0.3) transparent;
+}
+
+.msg {
+  max-width: 82%;
+  padding: 12px 18px;
+  border-radius: 22px;
+  font-size: 0.95rem; line-height: 1.55;
+  animation: msg-in 0.3s ease both;
+}
+@keyframes msg-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.msg.agent { background: rgba(100,31,251,0.2); border: 1px solid rgba(155,89,252,0.25); color: #d8caff; align-self: flex-start; }
+.msg.user { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: var(--white); align-self: flex-end; }
+
+#btn-end {
+  padding: 14px 38px;
+  font-size: 0.9rem; font-weight: 700; letter-spacing: 0.06em;
+  color: #ff6b6b;
+  background: rgba(255,107,107,0.08);
+  border: 1px solid rgba(255,107,107,0.3);
+  border-radius: 99px; cursor: pointer;
+  transition: all 0.2s;
+}
+#btn-end:hover { background: rgba(255,107,107,0.18); border-color: rgba(255,107,107,0.6); }
+
+/* ===== POST-CALL ===== */
+#s-postcall { gap: 1.8rem; text-align: center; }
+
+.post-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, var(--cyan) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.post-card {
+  max-width: 500px; width: 100%;
+  padding: 28px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: 20px;
+  text-align: left;
+}
+.post-card-title {
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--dim);
+  margin-bottom: 10px;
+}
+.post-card-body { font-size: 0.95rem; line-height: 1.65; color: var(--white); }
+
+.cta-outro {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 15px 36px;
+  font-size: 0.95rem; font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--magenta));
+  border: none; border-radius: 99px; cursor: pointer;
+  box-shadow: 0 0 30px rgba(100,31,251,0.4);
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.cta-outro:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(100,31,251,0.6); }
+
+/* ===== SCAN LINE (decoration) ===== */
+.scan-line {
+  position: fixed;
+  left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(155,89,252,0.4), transparent);
+  pointer-events: none;
+  z-index: 0;
+  animation: scan 8s linear infinite;
+  opacity: 0.5;
+}
+@keyframes scan { from{top:-1px} to{top:100vh} }
+
+/* ===== CORNER DECORATIONS ===== */
+.corner { position: fixed; width: 60px; height: 60px; z-index: 0; opacity: 0.25; }
+.corner-tl { top: 24px; left: 24px; border-top: 1px solid var(--purple2); border-left: 1px solid var(--purple2); }
+.corner-tr { top: 24px; right: 24px; border-top: 1px solid var(--purple2); border-right: 1px solid var(--purple2); }
+.corner-bl { bottom: 24px; left: 24px; border-bottom: 1px solid var(--purple2); border-left: 1px solid var(--purple2); }
+.corner-br { bottom: 24px; right: 24px; border-bottom: 1px solid var(--purple2); border-right: 1px solid var(--purple2); }
+
+/* ===== TOAST ===== */
+#toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  padding: 12px 24px; border-radius: 12px;
+  background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.3);
+  color: #ff8888; font-size: 0.88rem;
+  z-index: 100; opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none; max-width: 360px; text-align: center;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Background canvas -->
+<canvas id="bg-c"></canvas>
+
+<!-- Orb -->
+<div id="orb-wrap" class="hero">
+  <canvas id="orb-c"></canvas>
+</div>
+
+<!-- Corner decorations -->
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+<div class="scan-line"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- ① WELCOME -->
+  <div id="s-welcome" class="screen active">
+    <div class="badge">Demo Interattiva</div>
+    <h1 class="headline">Parla.<br>Noi<br>Ascoltiamo.</h1>
+    <p class="sub">In 60 secondi costruiamo un agente AI vocale<br>personalizzato sul tuo problema reale.</p>
+    <button class="btn-primary" id="btn-start">
+      Inizia l'esperienza
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+
+  <!-- ② QUESTIONS -->
+  <div id="s-questions" class="screen">
+    <div id="q-progress"></div>
+    <div id="q-box">
+      <!-- dynamically filled -->
+    </div>
+  </div>
+
+  <!-- ③ BUILDING -->
+  <div id="s-building" class="screen">
+    <div class="build-label">Sto costruendo il tuo agente...</div>
+    <div id="prompt-preview"></div>
+    <div class="build-status" id="build-status">Analisi delle risposte in corso...</div>
+  </div>
+
+  <!-- ④ READY -->
+  <div id="s-ready" class="screen">
+    <div class="ready-title">Il tuo agente<br>è pronto.</div>
+    <div class="mic-guide">
+      <div class="mic-step"><div class="mic-icon">🎙️</div><span>Quando clicchi <strong>CHIAMA</strong>, il browser chiederà accesso al microfono</span></div>
+      <div class="mic-step"><div class="mic-icon">✅</div><span>Clicca <strong>Consenti</strong> sul popup che apparirà in alto a sinistra</span></div>
+      <div class="mic-step"><div class="mic-icon">🔊</div><span>Assicurati che il volume sia alzato e le cuffie connesse</span></div>
+    </div>
+    <button id="btn-call">
+      <div class="call-ring"></div>
+      <div class="call-ring2"></div>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+      CHIAMA ORA
+    </button>
+  </div>
+
+  <!-- ⑤ IN-CALL -->
+  <div id="s-call" class="screen">
+    <div class="call-header">
+      <div id="call-status-badge">
+        <div class="dot"></div>
+        <span id="call-status-text">Connessione...</span>
+      </div>
+    </div>
+    <div id="transcript"></div>
+    <button id="btn-end">⬛ Termina chiamata</button>
+  </div>
+
+  <!-- ⑥ POST-CALL -->
+  <div id="s-postcall" class="screen">
+    <div class="post-title">Chiamata completata.</div>
+    <div class="post-card" id="post-summary">
+      <div class="post-card-title">Riepilogo</div>
+      <div class="post-card-body" id="post-body">Caricamento analisi...</div>
+    </div>
+    <a href="https://atsco.it" class="cta-outro">
+      Vuoi un agente come questo?
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+    <button id="btn-restart" style="background:none;border:none;color:var(--dim);font-size:0.85rem;cursor:pointer;text-decoration:underline;margin-top:-8px;">
+      Ricomincia la demo
+    </button>
+  </div>
+
+</div><!-- #app -->
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script type="module">
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const CFG = {
+  sessionEndpoint: '/api/voice-demo/session',
+  agentDisplayName: 'Alex',
+  company: 'ATS'
+};
+
+// ─── IMPORTS ───────────────────────────────────────────────────────────────
+let Conversation;
+try {
+  const mod = await import('https://esm.sh/@elevenlabs/client@latest');
+  Conversation = mod.Conversation;
+} catch(e) {
+  console.warn('ElevenLabs SDK not loaded:', e);
+}
+
+// ─── NOISE GLSL ────────────────────────────────────────────────────────────
+const NOISE = `
+vec3 nm289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 nm289v4(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 nperm(vec4 x){return nm289v4(((x*34.)+10.)*x);}
+vec4 ntis(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.);
+  const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy));
+  vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz);
+  vec3 l=1.-g;
+  vec3 i1=min(g.xyz,l.zxy);
+  vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx;
+  vec3 x2=x0-i2+C.yyy;
+  vec3 x3=x0-D.yyy;
+  i=nm289(i);
+  vec4 p=nperm(nperm(nperm(
+    i.z+vec4(0.,i1.z,i2.z,1.))
+    +i.y+vec4(0.,i1.y,i2.y,1.))
+    +i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857;
+  vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z);
+  vec4 x_=floor(j*ns.z);
+  vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy;
+  vec4 y=y_*ns.x+ns.yyyy;
+  vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy);
+  vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.;
+  vec4 s1=floor(b1)*2.+1.;
+  vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+  vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x);
+  vec3 p1=vec3(a0.zw,h.y);
+  vec3 p2=vec3(a1.xy,h.z);
+  vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=ntis(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
+  m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+// ─── ORB (Three.js) ────────────────────────────────────────────────────────
+class MorphicOrb {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.state = 'idle';  // idle | listening | speaking
+    this.targetAmp = 0.08;
+    this.targetFreq = 2.2;
+    this.targetSpeed = 0.25;
+    this.currentAmp = 0.08;
+    this.currentFreq = 2.2;
+    this.currentSpeed = 0.25;
+    this._setup();
+    this._animate();
+  }
+
+  _setup() {
+    const w = this.canvas.offsetWidth || 560;
+    const h = this.canvas.offsetHeight || 560;
+
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+    this.camera.position.z = 3;
+
+    const vs = `
+      ${NOISE}
+      uniform float uTime;
+      uniform float uAmp;
+      uniform float uFreq;
+      uniform float uSpeed;
+      varying vec3 vNormal;
+      varying vec3 vPos;
+      varying float vN;
+      void main(){
+        float n = snoise(position * uFreq + uTime * uSpeed * 0.4);
+        n += 0.5 * snoise(position * uFreq * 2.1 + uTime * uSpeed * 0.7);
+        n += 0.25 * snoise(position * uFreq * 4.3 + uTime * uSpeed * 1.1);
+        n /= 1.75;
+        vec3 np = position + normal * n * uAmp;
+        vNormal = normalize(normalMatrix * normal);
+        vPos = np;
+        vN = n * 0.5 + 0.5;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(np, 1.0);
+      }
+    `;
+
+    const fs = `
+      uniform float uTime;
+      uniform float uState; // 0=idle 1=listening 2=speaking
+      varying vec3 vNormal;
+      varying vec3 vPos;
+      varying float vN;
+      void main(){
+        vec3 vd = normalize(cameraPosition - vPos);
+        float fr = 1.0 - max(0.0, dot(vd, vNormal));
+        fr = pow(fr, 1.8);
+
+        // Palette per stato
+        vec3 cIdle1   = vec3(0.39, 0.12, 0.98);
+        vec3 cIdle2   = vec3(0.75, 0.15, 0.83);
+        vec3 cListen1 = vec3(0.04, 0.71, 0.83);
+        vec3 cListen2 = vec3(0.39, 0.12, 0.98);
+        vec3 cSpeak1  = vec3(0.88, 0.05, 0.72);
+        vec3 cSpeak2  = vec3(0.39, 0.12, 0.98);
+
+        vec3 c1 = mix(mix(cIdle1, cListen1, clamp(uState,0.,1.)), cSpeak1, clamp(uState-1.,0.,1.));
+        vec3 c2 = mix(mix(cIdle2, cListen2, clamp(uState,0.,1.)), cSpeak2, clamp(uState-1.,0.,1.));
+
+        vec3 col = mix(c1, c2, vN);
+        col = mix(col, c1 * 1.6, fr * 0.5);
+
+        // Iridescenza
+        float t = uTime * 0.15;
+        float ir = sin(vN * 6.28 + t) * 0.15;
+        col += ir * vec3(0.4, 0.2, 0.8);
+
+        float alpha = mix(0.72, 1.0, 1.0 - fr * 0.4);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `;
+
+    this.mat = new THREE.ShaderMaterial({
+      vertexShader: vs,
+      fragmentShader: fs,
+      transparent: true,
+      uniforms: {
+        uTime:  { value: 0 },
+        uAmp:   { value: 0.08 },
+        uFreq:  { value: 2.2 },
+        uSpeed: { value: 0.25 },
+        uState: { value: 0 }
+      }
+    });
+
+    const geo = new THREE.SphereGeometry(1, 72, 72);
+    this.mesh = new THREE.Mesh(geo, this.mat);
+    this.scene.add(this.mesh);
+
+    // Glow sphere
+    const glowMat = new THREE.ShaderMaterial({
+      vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader: `
+        uniform float uState;
+        varying vec3 vN;
+        void main(){
+          vec3 vd=normalize(cameraPosition-vec3(0.));
+          float fr=1.-max(0.,dot(vd,vN));
+          fr=pow(fr,3.);
+          vec3 c=mix(vec3(0.39,0.12,0.98), mix(vec3(0.04,0.71,0.83),vec3(0.88,0.05,0.72),clamp(uState-1.,0.,1.)), clamp(uState,0.,1.));
+          gl_FragColor=vec4(c,fr*0.5);
+        }
+      `,
+      transparent: true,
+      side: THREE.BackSide,
+      uniforms: { uState: { value: 0 } }
+    });
+    const glowMesh = new THREE.Mesh(new THREE.SphereGeometry(1.22, 32, 32), glowMat);
+    this.scene.add(glowMesh);
+    this.glowMat = glowMat;
+
+    this.clock = new THREE.Clock();
+
+    // Resize
+    window.addEventListener('resize', () => {
+      const W = this.canvas.offsetWidth;
+      const H = this.canvas.offsetHeight;
+      this.camera.aspect = W / H;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(W, H);
+    });
+  }
+
+  setState(s) {
+    this.state = s;
+    const map = {
+      idle:      { amp: 0.08, freq: 2.2, speed: 0.25, sv: 0 },
+      listening: { amp: 0.28, freq: 3.8, speed: 0.90, sv: 1 },
+      speaking:  { amp: 0.38, freq: 4.5, speed: 1.30, sv: 2 }
+    };
+    const p = map[s] || map.idle;
+    this.targetAmp = p.amp;
+    this.targetFreq = p.freq;
+    this.targetSpeed = p.speed;
+    this._targetStateVal = p.sv;
+  }
+
+  _lerp(a, b, t) { return a + (b - a) * t; }
+
+  _animate() {
+    requestAnimationFrame(() => this._animate());
+    const t = this.clock.getElapsedTime();
+
+    // Smooth lerp
+    const sp = 0.04;
+    this.currentAmp = this._lerp(this.currentAmp, this.targetAmp, sp);
+    this.currentFreq = this._lerp(this.currentFreq, this.targetFreq, sp);
+    this.currentSpeed = this._lerp(this.currentSpeed, this.targetSpeed, sp);
+    const sv = this._targetStateVal ?? 0;
+    this.mat.uniforms.uState.value = this._lerp(this.mat.uniforms.uState.value || 0, sv, 0.04);
+    if (this.glowMat) this.glowMat.uniforms.uState.value = this.mat.uniforms.uState.value;
+
+    this.mat.uniforms.uTime.value = t;
+    this.mat.uniforms.uAmp.value = this.currentAmp;
+    this.mat.uniforms.uFreq.value = this.currentFreq;
+    this.mat.uniforms.uSpeed.value = this.currentSpeed;
+
+    this.mesh.rotation.y = t * 0.06;
+    this.mesh.rotation.x = Math.sin(t * 0.07) * 0.08;
+
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+// ─── BACKGROUND PARTICLES ──────────────────────────────────────────────────
+function initBg(canvas) {
+  const ctx = canvas.getContext('2d');
+  let W, H, stars = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    stars = Array.from({ length: 180 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 1.2 + 0.2,
+      a: Math.random(),
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      pulse: Math.random() * Math.PI * 2
+    }));
+  }
+
+  function draw(ts) {
+    requestAnimationFrame(draw);
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      s.x = (s.x + s.vx + W) % W;
+      s.y = (s.y + s.vy + H) % H;
+      s.pulse += 0.012;
+      const alpha = (0.2 + Math.sin(s.pulse) * 0.15) * s.a;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,160,255,${alpha})`;
+      ctx.fill();
+    }
+  }
+
+  window.addEventListener('resize', resize);
+  resize(); draw(0);
+}
+
+// ─── QUESTIONS ─────────────────────────────────────────────────────────────
+const QUESTIONS = [
+  {
+    id: 'identity',
+    text: 'Prima di tutto... come ti chiami?',
+    type: 'inputs',
+    inputs: [
+      { key: 'name',    placeholder: 'Il tuo nome', icon: '👤' },
+      { key: 'company', placeholder: 'Nome della tua azienda', icon: '🏢' }
+    ]
+  },
+  {
+    id: 'sector',
+    text: 'In quale settore opera la tua azienda?',
+    type: 'chips',
+    chips: ['Tecnologia / SaaS', 'Automotive', 'Retail / E-commerce', 'Manifattura', 'Sanità', 'Finanza', 'Immobiliare', 'Altro']
+  },
+  {
+    id: 'problem',
+    text: 'Qual è la sfida più grande che vuoi risolvere?',
+    type: 'large-btns',
+    options: [
+      { key: 'leads', icon: '📥', text: 'Non riesco a gestire tutti i lead in arrivo' },
+      { key: 'speed', icon: '⚡', text: 'Contatto i prospect troppo lentamente' },
+      { key: 'quality', icon: '🎯', text: 'Il team perde tempo su lead di bassa qualità' },
+      { key: 'feedback', icon: '💬', text: 'Ho bisogno di raccogliere feedback dai clienti' },
+      { key: 'custom', icon: '✏️', text: 'Altro...' }
+    ]
+  },
+  {
+    id: 'target',
+    text: 'I tuoi clienti sono...',
+    type: 'large-btns',
+    options: [
+      { key: 'b2b', icon: '🏢', text: 'Aziende (B2B)' },
+      { key: 'b2c', icon: '👤', text: 'Consumatori finali (B2C)' },
+      { key: 'both', icon: '🔀', text: 'Entrambi' }
+    ]
+  },
+  {
+    id: 'objective',
+    text: 'Cosa deve ottenere l\'agente dalla chiamata?',
+    type: 'chips',
+    chips: ['Fissa un appuntamento', 'Qualifica il lead', 'Vendi direttamente', 'Raccolta feedback', 'Supporto clienti']
+  }
+];
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+const answers = {};
+let currentQ = 0;
+let orb, convRef = null;
+
+// ─── UTILS ─────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function toast(msg, dur = 4000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function updateProgress(current, total) {
+  const container = document.getElementById('q-progress');
+  container.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'q-dot' + (i < current ? ' done' : i === current ? ' active' : '');
+    container.appendChild(d);
+  }
+}
+
+// ─── RENDER QUESTION ───────────────────────────────────────────────────────
+function renderQuestion(idx) {
+  const q = QUESTIONS[idx];
+  const box = document.getElementById('q-box');
+  updateProgress(idx, QUESTIONS.length);
+
+  let html = `<div class="q-number">Domanda ${idx + 1} di ${QUESTIONS.length}</div>`;
+  html += `<div class="q-text">${q.text}</div>`;
+
+  if (q.type === 'inputs') {
+    for (const inp of q.inputs) {
+      html += `<input class="q-input" id="qi-${inp.key}" placeholder="${inp.placeholder}" autocomplete="off" value="${answers[inp.key] || ''}">`;
+    }
+  } else if (q.type === 'chips') {
+    html += `<div class="q-chips" id="q-chips">`;
+    for (const c of q.chips) {
+      const sel = answers[q.id] === c ? ' sel' : '';
+      html += `<div class="q-chip${sel}" data-val="${c}">${c}</div>`;
+    }
+    html += `</div>`;
+    if (q.id === 'problem' && answers.problem === 'Altro...') {
+      html += `<textarea class="q-textarea" id="q-custom-problem" placeholder="Descrivi brevemente il tuo problema...">${answers.problemCustom || ''}</textarea>`;
+    }
+  } else if (q.type === 'large-btns') {
+    for (const opt of q.options) {
+      const sel = answers[q.id] === opt.key ? ' sel' : '';
+      html += `<button class="q-large-btn${sel}" data-val="${opt.key}"><span class="icon">${opt.icon}</span><span>${opt.text}</span></button>`;
+    }
+    if (q.id === 'problem' && answers.problem === 'custom') {
+      html += `<textarea class="q-textarea" id="q-custom-problem" placeholder="Descrivi brevemente il tuo problema...">${answers.problemCustom || ''}</textarea>`;
+    }
+  }
+
+  const isLast = idx === QUESTIONS.length - 1;
+  html += `<button class="btn-next" id="btn-next">${isLast ? 'Costruisci il mio agente →' : 'Avanti →'}</button>`;
+
+  box.innerHTML = html;
+  box.style.animation = 'none';
+  requestAnimationFrame(() => { box.style.animation = ''; });
+
+  // Wire chips
+  box.querySelectorAll('.q-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      box.querySelectorAll('.q-chip').forEach(c => c.classList.remove('sel'));
+      chip.classList.add('sel');
+      answers[q.id] = chip.dataset.val;
+      // Show custom textarea if Altro
+      if (q.id === 'problem' && chip.dataset.val === 'Altro...') {
+        if (!box.querySelector('#q-custom-problem')) {
+          const ta = document.createElement('textarea');
+          ta.className = 'q-textarea'; ta.id = 'q-custom-problem';
+          ta.placeholder = 'Descrivi brevemente il tuo problema...';
+          box.querySelector('.q-chips').after(ta);
+        }
+      } else {
+        const ta = box.querySelector('#q-custom-problem');
+        if (ta) ta.remove();
+      }
+    });
+  });
+
+  // Wire large-btns
+  box.querySelectorAll('.q-large-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      box.querySelectorAll('.q-large-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+      answers[q.id] = btn.dataset.val;
+      if (q.id === 'problem' && btn.dataset.val === 'custom') {
+        if (!box.querySelector('#q-custom-problem')) {
+          const ta = document.createElement('textarea');
+          ta.className = 'q-textarea'; ta.id = 'q-custom-problem';
+          ta.placeholder = 'Descrivi brevemente il tuo problema...';
+          btn.closest('#q-box').appendChild(ta);
+          const nb = box.querySelector('#btn-next');
+          if(nb) nb.after(ta);
+        }
+      } else {
+        const ta = box.querySelector('#q-custom-problem');
+        if (ta) ta.remove();
+      }
+    });
+  });
+
+  // Wire next button
+  document.getElementById('btn-next').addEventListener('click', () => {
+    // Validate
+    if (q.type === 'inputs') {
+      for (const inp of q.inputs) {
+        const val = document.getElementById(`qi-${inp.key}`)?.value.trim();
+        if (!val) { toast(`Inserisci ${inp.placeholder.toLowerCase()}`); return; }
+        answers[inp.key] = val;
+      }
+    } else {
+      if (!answers[q.id]) { toast('Seleziona un\'opzione per continuare'); return; }
+      if ((q.id === 'problem') && (answers[q.id] === 'Altro...' || answers[q.id] === 'custom')) {
+        const ta = document.getElementById('q-custom-problem');
+        if (!ta?.value.trim()) { toast('Descrivi il tuo problema'); return; }
+        answers.problemCustom = ta.value.trim();
+      }
+    }
+
+    if (idx < QUESTIONS.length - 1) {
+      currentQ++;
+      renderQuestion(currentQ);
+    } else {
+      startBuilding();
+    }
+  });
+}
+
+// ─── PROMPT BUILDER ────────────────────────────────────────────────────────
+function buildPrompt(a) {
+  const name = a.name || 'il visitatore';
+  const company = a.company || 'la loro azienda';
+  const sector = a.sector || 'settore non specificato';
+  const targetMap = { b2b: 'aziende (B2B)', b2c: 'consumatori finali (B2C)', both: 'aziende e consumatori' };
+  const target = targetMap[a.target] || a.target || 'clienti';
+  const problemMap = {
+    leads:    'difficoltà a gestire tutti i lead in arrivo',
+    speed:    'lentezza nel contattare i prospect',
+    quality:  'team che perde tempo su lead di bassa qualità',
+    feedback: 'necessità di raccogliere feedback dai clienti'
+  };
+  const problem = a.problemCustom || problemMap[a.problem] || a.problem || 'processo di acquisizione clienti';
+  const objectiveMap = {
+    'Fissa un appuntamento':  'fissare un appuntamento con un consulente ATS',
+    'Qualifica il lead':      'qualificare l\'interesse e raccogliere dati chiave',
+    'Vendi direttamente':     'presentare la soluzione e guidare verso l\'acquisto',
+    'Raccolta feedback':      'raccogliere feedback dettagliato',
+    'Supporto clienti':       'risolvere il problema e offrire supporto'
+  };
+  const objective = objectiveMap[a.objective] || a.objective || 'qualificare il lead';
+
+  return `Sei ${CFG.agentDisplayName}, consulente AI vocale di ${CFG.company} (Automated Technology Solutions).
+
+CONTESTO: stai parlando con ${name} di ${company}, operativa nel settore ${sector}. I loro clienti sono ${target}.
+
+SFIDA DICHIARATA: ${problem}.
+
+OBIETTIVO CHIAMATA: ${objective}.
+
+ISTRUZIONI:
+- Presentati: "Ciao ${name}, sono ${CFG.agentDisplayName} di ATS."
+- Mostra di conoscere la loro sfida specifica ("${problem}")
+- Sii diretto, caldo e professionale — non leggere questo script
+- Tieni la chiamata sotto 3 minuti
+- IMPORTANTE: questa è una DEMO live dell'agente AI — sii sempre trasparente su questo se chiesto
+- Se chiedono di ATS: "Siamo una società italiana che automatizza processi aziendali con agenti AI vocali"
+
+GESTIONE OBIEZIONI:
+- "Non ho tempo" → "Capisco, mi servono 45 secondi per farti vedere una cosa concreta."
+- "Non mi interessa" → "Curioso. Cosa ti farebbe cambiare idea?"
+- "Ho già qualcosa" → "Ottimo. Posso farti una domanda veloce su come lo stai usando?"
+
+APERTURA: "Ciao ${name}! Sono ${CFG.agentDisplayName} di ATS. So che stai affrontando ${problem} — è esattamente la specialità di ATS. Ho 2 minuti per mostrarti come lo risolviamo. Va bene?"`;
+}
+
+// ─── BUILD ANIMATION ───────────────────────────────────────────────────────
+async function startBuilding() {
+  orb.setState('listening');
+  showScreen('s-building');
+
+  const prompt = buildPrompt(answers);
+  const preview = document.getElementById('prompt-preview');
+  const status = document.getElementById('build-status');
+
+  const statusTexts = [
+    'Analisi delle risposte in corso...',
+    'Configurazione personalità agente...',
+    'Ottimizzazione script apertura...',
+    'Caricamento gestione obiezioni...',
+    'Agente pronto! ✨'
+  ];
+
+  let si = 0;
+  const statusInterval = setInterval(() => {
+    if (si < statusTexts.length - 1) status.textContent = statusTexts[++si];
+    else clearInterval(statusInterval);
+  }, 600);
+
+  // Typewriter effect for prompt preview
+  let i = 0;
+  preview.textContent = '';
+  await new Promise(resolve => {
+    const interval = setInterval(() => {
+      if (i < prompt.length) {
+        preview.textContent += prompt[i++];
+        preview.scrollTop = preview.scrollHeight;
+      } else {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 10);
+  });
+
+  answers._prompt = prompt;
+
+  await new Promise(r => setTimeout(r, 800));
+  orb.setState('idle');
+  showScreen('s-ready');
+  document.getElementById('orb-wrap').className = 'hero mini';
+}
+
+// ─── CALL ──────────────────────────────────────────────────────────────────
+async function startCall() {
+  if (!Conversation) {
+    toast('SDK ElevenLabs non disponibile. Verifica la connessione.');
+    return;
+  }
+
+  showScreen('s-call');
+  const badge = document.getElementById('call-status-badge');
+  const statusText = document.getElementById('call-status-text');
+  const transcript = document.getElementById('transcript');
+
+  statusText.textContent = 'Connessione...';
+
+  function addMsg(speaker, text) {
+    const d = document.createElement('div');
+    d.className = `msg ${speaker}`;
+    d.textContent = text;
+    transcript.appendChild(d);
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  try {
+    // Request mic first
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // Get signed URL from backend
+    const sessionRes = await fetch(CFG.sessionEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        promptDraft: answers._prompt,
+        agentName: CFG.agentDisplayName,
+        userName: answers.name,
+        company: answers.company
+      })
+    });
+
+    if (!sessionRes.ok) {
+      const err = await sessionRes.json().catch(() => ({}));
+      throw new Error(err.error || `Errore server (${sessionRes.status})`);
+    }
+
+    const session = await sessionRes.json();
+    orb.setState('idle');
+
+    convRef = await Conversation.startSession({
+      signedUrl: session.signedUrl,
+      overrides: {
+        agent: {
+          prompt: { prompt: session.effectivePrompt || answers._prompt },
+          firstMessage: session.firstMessage || undefined,
+          language: 'it'
+        },
+        tts: session.voiceTuning?.tts || {}
+      },
+      onConnect: () => {
+        statusText.textContent = 'Connesso';
+        badge.className = 'connected';
+        orb.setState('idle');
+      },
+      onDisconnect: (details) => {
+        statusText.textContent = 'Chiamata terminata';
+        badge.className = '';
+        orb.setState('idle');
+        convRef = null;
+        setTimeout(() => showPostCall(session), 800);
+      },
+      onModeChange: ({ mode }) => {
+        if (mode === 'listening') {
+          orb.setState('listening');
+          badge.className = 'listening';
+          statusText.textContent = 'Ti sta ascoltando...';
+        } else if (mode === 'speaking') {
+          orb.setState('speaking');
+          badge.className = 'speaking';
+          statusText.textContent = 'Sta parlando...';
+        } else {
+          orb.setState('idle');
+          badge.className = 'connected';
+          statusText.textContent = 'Connesso';
+        }
+      },
+      onMessage: (msg) => {
+        const text = String(msg?.message || '').trim();
+        if (!text) return;
+        const speaker = msg?.source === 'ai' ? 'agent' : 'user';
+        addMsg(speaker, text);
+      },
+      onError: (err) => {
+        toast('Errore conversazione: ' + (err || 'sconosciuto'));
+        orb.setState('idle');
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    toast('Errore: ' + (err?.message || 'impossibile avviare la chiamata'));
+    showScreen('s-ready');
+    document.getElementById('orb-wrap').className = 'hero mini';
+    orb.setState('idle');
+  }
+}
+
+async function endCall() {
+  if (convRef) {
+    try { await convRef.endSession(); } catch(e) { console.warn(e); }
+  } else {
+    showScreen('s-postcall');
+    orb.setState('idle');
+  }
+}
+
+// ─── POST CALL ─────────────────────────────────────────────────────────────
+function showPostCall(session) {
+  orb.setState('idle');
+  document.getElementById('orb-wrap').className = 'hero';
+
+  const body = document.getElementById('post-body');
+  const convId = session?.conversationId;
+
+  body.innerHTML = `
+    <p>Hai parlato con <strong>${CFG.agentDisplayName}</strong>, il tuo agente personalizzato per <em>${answers.company || 'la tua azienda'}</em>.</p>
+    <br>
+    <p>L'agente è stato configurato per affrontare: <strong>${answers.problemCustom || answers.problem || answers.sector || 'il tuo problema'}</strong>.</p>
+    ${convId ? `<br><p style="font-size:0.78rem;opacity:0.4">ID conversazione: ${convId}</p>` : ''}
+  `;
+
+  showScreen('s-postcall');
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  // Background
+  initBg(document.getElementById('bg-c'));
+
+  // Orb
+  orb = new MorphicOrb(document.getElementById('orb-c'));
+
+  // Welcome → Questions
+  document.getElementById('btn-start').addEventListener('click', () => {
+    orb.setState('listening');
+    showScreen('s-questions');
+    renderQuestion(0);
+    setTimeout(() => orb.setState('idle'), 1200);
+  });
+
+  // Ready → Call
+  document.getElementById('btn-call').addEventListener('click', startCall);
+
+  // End call
+  document.getElementById('btn-end').addEventListener('click', endCall);
+
+  // Restart
+  document.getElementById('btn-restart').addEventListener('click', () => {
+    Object.keys(answers).forEach(k => delete answers[k]);
+    currentQ = 0;
+    convRef = null;
+    document.getElementById('orb-wrap').className = 'hero';
+    document.getElementById('transcript').innerHTML = '';
+    orb.setState('idle');
+    showScreen('s-welcome');
+  });
+}
+
+init();
+</script>
+</body>
+</html>
