@@ -3,7 +3,7 @@
 > Il prompt dinamico (generato dal form) viene passato via `overrides.agent.prompt` ad ogni sessione e **sovrascrive** questo base — ma questo base definisce la personalità, le regole di sicurezza e i fallback.
 
 ---
-
+## X
 ## BASE SYSTEM PROMPT (da incollare nella dashboard ElevenLabs)
 
 ```
