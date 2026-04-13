@@ -1413,22 +1413,31 @@ async function startCall() {
     const session = await sessionRes.json();
     orb.setState('idle');
 
+    // Costruisce gli overrides: SOLO campi che ElevenLabs ConvAI accetta
+    // tts accetta solo voiceId — speed/stability/similarityBoost NON sono override validi
+    // e causano disconnessione immediata
+    const sessionOverrides = {
+      agent: {
+        prompt: { prompt: session.effectivePrompt || answers._prompt },
+        ...(session.firstMessage ? { firstMessage: session.firstMessage } : {}),
+        // language: 'it'  ← commentato: può rompere se l'agente non ha IT abilitato
+      }
+    };
+
+    console.log('[demo] startSession overrides:', JSON.stringify(sessionOverrides, null, 2));
+
     convRef = await Conversation.startSession({
       signedUrl: session.signedUrl,
-      overrides: {
-        agent: {
-          prompt: { prompt: session.effectivePrompt || answers._prompt },
-          firstMessage: session.firstMessage || undefined,
-          language: 'it'
-        },
-        tts: session.voiceTuning?.tts || {}
-      },
-      onConnect: () => {
+      overrides: sessionOverrides,
+      onConnect: ({ conversationId } = {}) => {
+        console.log('[demo] onConnect — conversationId:', conversationId);
         statusText.textContent = 'Connesso';
         badge.className = 'connected';
         orb.setState('idle');
+        setOrbLabel('In ascolto...');
       },
       onDisconnect: (details) => {
+        console.log('[demo] onDisconnect — details:', details);
         statusText.textContent = 'Chiamata terminata';
         badge.className = '';
         orb.setState('idle');
@@ -1440,14 +1449,17 @@ async function startCall() {
           orb.setState('listening');
           badge.className = 'listening';
           statusText.textContent = 'Ti sta ascoltando...';
+          setOrbLabel('In ascolto...');
         } else if (mode === 'speaking') {
           orb.setState('speaking');
           badge.className = 'speaking';
           statusText.textContent = 'Sta parlando...';
+          setOrbLabel('Rispondo...');
         } else {
           orb.setState('idle');
           badge.className = 'connected';
           statusText.textContent = 'Connesso';
+          setOrbLabel('In ascolto...');
         }
       },
       onMessage: (msg) => {
@@ -1456,8 +1468,9 @@ async function startCall() {
         const speaker = msg?.source === 'ai' ? 'agent' : 'user';
         addMsg(speaker, text);
       },
-      onError: (err) => {
-        toast('Errore conversazione: ' + (err || 'sconosciuto'));
+      onError: (errMsg, context) => {
+        console.error('[demo] onError:', errMsg, context);
+        toast('Errore: ' + (errMsg || 'sconosciuto'));
         orb.setState('idle');
       }
     });

@@ -125,11 +125,11 @@ router.post(
 
       return res.json({
         signedUrl,
-        conversationId : null, // viene assegnato da EL al momento della connessione WS
         effectivePrompt,
-        firstMessage,
-        voiceTuning    : { tts: { speed: 1.0, stability: 0.5, similarityBoost: 0.75 } },
+        firstMessage,   // estratto dall'APERTURA del prompt — può essere null
         agentName, userName, company,
+        // voiceTuning rimosso: speed/stability non sono override ConvAI validi
+        // → usare le impostazioni voce della dashboard ElevenLabs
       });
 
     } catch (err) {
