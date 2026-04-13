@@ -1338,30 +1338,33 @@ async function startBuilding() {
     'Agente pronto! ✨'
   ];
 
+  // Status labels sincronizzati con la durata reale della scrittura (~1.8s)
   let si = 0;
+  const STATUS_INTERVAL = 420;
   const statusInterval = setInterval(() => {
     if (si < statusTexts.length - 1) status.textContent = statusTexts[++si];
     else clearInterval(statusInterval);
-  }, 600);
+  }, STATUS_INTERVAL);
 
-  // Typewriter effect for prompt preview
+  // Typewriter veloce: 8 caratteri per tick ogni 12ms → ~1.8s per 1200 chars
+  // Ultimi 40 caratteri rallentano a 1/tick per effetto "assestamento"
+  const TAIL = 40;
   let i = 0;
   preview.textContent = '';
   await new Promise(resolve => {
     const interval = setInterval(() => {
-      if (i < prompt.length) {
-        preview.textContent += prompt[i++];
-        preview.scrollTop = preview.scrollHeight;
-      } else {
-        clearInterval(interval);
-        resolve();
-      }
-    }, 10);
+      const remaining = prompt.length - i;
+      if (remaining <= 0) { clearInterval(interval); resolve(); return; }
+      const batch = remaining <= TAIL ? 1 : 8;
+      preview.textContent += prompt.slice(i, i + batch);
+      i += batch;
+      preview.scrollTop = preview.scrollHeight;
+    }, 12);
   });
 
   answers._prompt = prompt;
 
-  await new Promise(r => setTimeout(r, 800));
+  await new Promise(r => setTimeout(r, 400));
   orb.setState('idle');
   setOrbLabel('Pronto per la chiamata');
   showScreen('s-ready');
