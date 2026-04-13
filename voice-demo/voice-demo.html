@@ -766,7 +766,8 @@ class MorphicOrb {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
-    this.camera.position.z = 3;
+    // z=4.5: glow occupa ~65% canvas (era 98% con z=3 → veniva clippato)
+    this.camera.position.z = 4.5;
 
     const vs = `
       ${NOISE}
