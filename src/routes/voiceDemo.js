@@ -81,36 +81,51 @@ router.post(
 
     const firstMessage = extractFirstMessage(effectivePrompt);
 
-    // Chiamata ElevenLabs
+    // Chiamata ElevenLabs ── signed URL
     try {
+      // Nota: include_conversation_id NON è un param valido → rimosso
       const url = `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url` +
-        `?agent_id=${encodeURIComponent(agentId)}&include_conversation_id=true`;
+        `?agent_id=${encodeURIComponent(agentId)}`;
 
       const elRes = await fetch(url, {
         method: 'GET',
         headers: { 'xi-api-key': apiKey },
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!elRes.ok) {
-        const errText = await elRes.text().catch(() => '');
-        throw new Error(`ElevenLabs ${elRes.status}: ${errText.slice(0, 200)}`);
+        const errBody = await elRes.text().catch(() => '');
+        const detail  = errBody.slice(0, 300);
+        console.error(
+          `[voice-demo] ElevenLabs error: HTTP ${elRes.status}` +
+          ` agent=${agentId.slice(0,8)}… body=${detail}`
+        );
+        // In sviluppo esponi il dettaglio, in produzione messaggio generico
+        const isDev = process.env.NODE_ENV !== 'production';
+        return res.status(502).json({
+          error: isDev
+            ? `ElevenLabs ${elRes.status}: ${detail}`
+            : 'Servizio vocale temporaneamente non disponibile. Riprova tra qualche secondo.',
+          code: `EL_${elRes.status}`,
+        });
       }
 
       const payload   = await elRes.json();
       const signedUrl = String(payload?.signed_url || '').trim();
-      const convId    = String(payload?.conversation_id || payload?.conversationId || '').trim();
 
-      if (!signedUrl) throw new Error('signed_url mancante nella risposta ElevenLabs');
+      if (!signedUrl) {
+        console.error('[voice-demo] signed_url assente in risposta EL:', JSON.stringify(payload));
+        throw new Error('signed_url assente nella risposta ElevenLabs');
+      }
 
       console.log(
-        `[voice-demo] ip=${getClientIP(req)} conv=${convId || '-'}` +
-        ` user="${userName}" daily=${dailySessions}/${MAX_DAILY()}`
+        `[voice-demo] ✓ sessione creata` +
+        ` ip=${getClientIP(req)} user="${userName}" daily=${dailySessions}/${MAX_DAILY()}`
       );
 
       return res.json({
         signedUrl,
-        conversationId : convId || null,
+        conversationId : null, // viene assegnato da EL al momento della connessione WS
         effectivePrompt,
         firstMessage,
         voiceTuning    : { tts: { speed: 1.0, stability: 0.5, similarityBoost: 0.75 } },
@@ -118,20 +133,34 @@ router.post(
       });
 
     } catch (err) {
+      const isDev = process.env.NODE_ENV !== 'production';
       console.error('[voice-demo] Errore sessione:', err.message);
-      // Non esporre dettagli interni al client
-      return res.status(502).json({ error: 'Errore temporaneo. Riprova tra qualche secondo.' });
+      return res.status(502).json({
+        error: isDev
+          ? `Errore interno: ${err.message}`
+          : 'Errore temporaneo. Riprova tra qualche secondo.',
+        code: 'SESSION_ERROR',
+      });
     }
   }
 );
 
 // ── GET /api/voice-demo/health ────────────────────────────────────────────────
 router.get('/health', (req, res) => {
-  res.json({
-    ok       : true,
-    hasApiKey : Boolean(ELEVENLABS_API_KEY()),
-    hasAgentId: Boolean(ELEVENLABS_AGENT_ID()),
-    daily    : { used: dailySessions, max: MAX_DAILY() },
+  const apiKey  = ELEVENLABS_API_KEY();
+  const agentId = ELEVENLABS_AGENT_ID();
+  const ok = Boolean(apiKey) && Boolean(agentId);
+  res.status(ok ? 200 : 503).json({
+    ok,
+    config: {
+      hasApiKey  : Boolean(apiKey),
+      apiKeyHint : apiKey  ? `${apiKey.slice(0,4)}…${apiKey.slice(-4)}`  : null,
+      hasAgentId : Boolean(agentId),
+      agentIdHint: agentId ? `${agentId.slice(0,6)}…` : null,
+    },
+    daily : { used: dailySessions, max: MAX_DAILY() },
+    node  : process.version,
+    env   : process.env.NODE_ENV || 'development',
   });
 });
 
