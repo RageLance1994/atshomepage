@@ -45,6 +45,13 @@ html, body {
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
 }
+/* Nella schermata domande: più piccola e spostata in alto
+   così il q-box non la copre e non sfora dal viewport */
+#orb-wrap.hero-q {
+  width: 420px; height: 420px;
+  top: 36%; left: 50%;
+  transform: translate(-50%, -50%);
+}
 #orb-wrap.mini {
   width: 180px; height: 180px;
   bottom: 32px; left: 50%;
@@ -249,16 +256,18 @@ html, body {
 .q-large-btn .icon { font-size: 1.4rem; }
 
 .q-textarea {
-  width: 100%; height: 100px;
+  width: 100%; height: 110px;
   padding: 14px 18px;
   font-family: 'Inter', sans-serif;
   font-size: 0.95rem; color: var(--white);
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(155,89,252,0.35);
   border-radius: 12px;
   outline: none; resize: none;
   transition: border-color 0.2s, box-shadow 0.2s;
-  margin-bottom: 8px;
+  margin-top: 16px;
+  margin-bottom: 0;
+  display: block;
 }
 .q-textarea:focus {
   border-color: var(--purple2);
@@ -927,11 +936,15 @@ const QUESTIONS = [
     text: 'Qual è la sfida più grande che vuoi risolvere?',
     type: 'large-btns',
     options: [
-      { key: 'leads', icon: '📥', text: 'Non riesco a gestire tutti i lead in arrivo' },
-      { key: 'speed', icon: '⚡', text: 'Contatto i prospect troppo lentamente' },
-      { key: 'quality', icon: '🎯', text: 'Il team perde tempo su lead di bassa qualità' },
-      { key: 'feedback', icon: '💬', text: 'Ho bisogno di raccogliere feedback dai clienti' },
-      { key: 'custom', icon: '✏️', text: 'Altro...' }
+      { key: 'leads',    icon: '📥', text: 'Non riesco a gestire tutti i lead in arrivo' },
+      { key: 'speed',    icon: '⚡', text: 'I prospect non vengono ricontattati in tempo' },
+      { key: 'quality',  icon: '🎯', text: 'Il team perde tempo su lead di bassa qualità' },
+      { key: 'followup', icon: '📞', text: 'Follow-up dopo fiera, evento o preventivo' },
+      { key: 'renew',    icon: '🔄', text: 'Rinnovi e upsell su clienti esistenti' },
+      { key: 'booking',  icon: '📅', text: 'Prenotazioni, appuntamenti e promemoria' },
+      { key: 'feedback', icon: '💬', text: 'Raccolta feedback e NPS vocale' },
+      { key: 'recovery', icon: '💳', text: 'Recupero crediti o contratti in scadenza' },
+      { key: 'custom',   icon: '✏️', text: 'Altro...' }
     ]
   },
   {
@@ -1051,10 +1064,13 @@ function renderQuestion(idx) {
         if (!box.querySelector('#q-custom-problem')) {
           const ta = document.createElement('textarea');
           ta.className = 'q-textarea'; ta.id = 'q-custom-problem';
-          ta.placeholder = 'Descrivi brevemente il tuo problema...';
-          btn.closest('#q-box').appendChild(ta);
+          ta.placeholder = 'Descrivi brevemente il tuo problema specifico...';
+          ta.value = answers.problemCustom || '';
+          // Inserisci PRIMA del bottone Avanti, non dopo
           const nb = box.querySelector('#btn-next');
-          if(nb) nb.after(ta);
+          if (nb) nb.before(ta);
+          else box.appendChild(ta);
+          setTimeout(() => ta.focus(), 50);
         }
       } else {
         const ta = box.querySelector('#q-custom-problem');
@@ -1099,9 +1115,13 @@ function buildPrompt(a) {
   const target = targetMap[a.target] || a.target || 'clienti';
   const problemMap = {
     leads:    'difficoltà a gestire tutti i lead in arrivo',
-    speed:    'lentezza nel contattare i prospect',
+    speed:    'prospect non ricontattati in tempo',
     quality:  'team che perde tempo su lead di bassa qualità',
-    feedback: 'necessità di raccogliere feedback dai clienti'
+    followup: 'follow-up mancato dopo fiere, eventi o preventivi',
+    renew:    'rinnovi e upsell su clienti esistenti non presidiati',
+    booking:  'gestione manuale di prenotazioni e appuntamenti',
+    feedback: 'raccolta feedback e NPS ancora manuale',
+    recovery: 'recupero crediti o contratti in scadenza non gestito'
   };
   const problem = a.problemCustom || problemMap[a.problem] || a.problem || 'processo di acquisizione clienti';
   const objectiveMap = {
@@ -1140,6 +1160,8 @@ APERTURA: "Ciao ${name}! Sono ${CFG.agentDisplayName} di ATS. So che stai affron
 // ─── BUILD ANIMATION ───────────────────────────────────────────────────────
 async function startBuilding() {
   orb.setState('listening');
+  // Ripristina posizione centrale uscendo dalla schermata domande
+  document.getElementById('orb-wrap').className = 'hero';
   showScreen('s-building');
 
   const prompt = buildPrompt(answers);
@@ -1325,6 +1347,7 @@ function init() {
   // Welcome → Questions
   document.getElementById('btn-start').addEventListener('click', () => {
     orb.setState('listening');
+    document.getElementById('orb-wrap').className = 'hero-q';
     showScreen('s-questions');
     renderQuestion(0);
     setTimeout(() => orb.setState('idle'), 1200);
