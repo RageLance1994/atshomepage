@@ -486,10 +486,28 @@ body {
 }
 
 /* ===== IN-CALL ===== */
-#s-call { gap: 1.5rem; justify-content: flex-end; padding-bottom: 32px; }
+#s-call {
+  gap: 1.5rem;
+  justify-content: flex-start;
+  padding: 20px 3.2rem 32px;
+  flex-direction: column;
+  align-items: center;
+}
+
+#s-call .logo {
+  position: absolute;
+  top: 18px;
+  left: 3.2rem;
+  display: flex;
+  align-items: center;
+  filter: drop-shadow(0 0 6px rgba(100,31,251,0.5));
+  transition: filter 0.3s;
+}
+#s-call .logo:hover { filter: drop-shadow(0 0 12px rgba(192,38,211,0.8)); }
+#s-call .logo svg { height: 24px; }
 
 .call-header {
-  position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 12px;
 }
 #call-status-badge {
@@ -513,7 +531,7 @@ body {
 
 #transcript {
   width: 100%; max-width: 540px;
-  max-height: 320px;
+  flex: 1;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: 10px;
   padding: 4px 2px;
@@ -698,6 +716,22 @@ body {
 
   <!-- ⑤ IN-CALL -->
   <div id="s-call" class="screen">
+    <div class="logo">
+      <svg viewBox="0 0 28.3 8.3" height="28" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">
+        <defs>
+          <linearGradient id="callLogoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#ffffff"/>
+          </linearGradient>
+          <filter id="callLogoGlow"><feGaussianBlur stdDeviation="0.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <path fill="url(#callLogoGrad)" filter="url(#callLogoGlow)" d="M28.2,7.1C28.2,7.1,28.2,7.1,28.2,7.1l-1.8-4.3c0,0,0,0,0,0l-0.3-0.6l-0.7,0.1c0,0,0,0,0,0L16.8,4V1.7H26
+    		l-0.5-1.1C25.3,0.2,25,0,24.6,0h-9.4v5c0,0.5,0.5,0.9,1,0.8v0c0,0,0,0,0,0l9-1.7l1,2.5H13.8h-0.4l0-1c0-0.2-0.1-0.4-0.2-0.6
+    		c-0.3-0.3-0.6-0.3-1-0.2C8.8,6.4,5.6,6.6,2.9,6.6c-0.4,0-1-0.1-1.2-0.4C1.7,6,1.5,5.3,2.4,3.4c0.4-0.7,0.7-1.4,1-1.7h8.3V3l1.7,1.2
+    		l0-4.2H2.9C2.7,0,2.4,0.1,2.2,0.4c0,0-0.8,1.1-1.4,2.3C0,4.6-0.2,6,0.3,7c0.3,0.6,1,1.3,2.6,1.3c2.5,0,5.5-0.2,8.8-1.4v1.4h1.2v0
+    		h0.8h13.7c0.2,0,0.4-0.1,0.6-0.2C28.3,7.8,28.4,7.4,28.2,7.1z"/>
+      </svg>
+    </div>
     <div class="call-header">
       <div id="call-status-badge">
         <div class="dot"></div>
