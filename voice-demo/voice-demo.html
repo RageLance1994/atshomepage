@@ -1271,53 +1271,140 @@ function renderQuestion(idx) {
 
 // ─── PROMPT BUILDER ────────────────────────────────────────────────────────
 function buildPrompt(a) {
-  const name = a.name || 'il visitatore';
-  const company = a.company || 'la loro azienda';
-  const sector = a.sector || 'settore non specificato';
-  const targetMap = { b2b: 'aziende (B2B)', b2c: 'consumatori finali (B2C)', both: 'aziende e consumatori' };
-  const target = targetMap[a.target] || a.target || 'clienti';
-  const problemMap = {
-    leads:    'difficoltà a gestire tutti i lead in arrivo',
-    speed:    'prospect non ricontattati in tempo',
-    quality:  'team che perde tempo su lead di bassa qualità',
-    followup: 'follow-up mancato dopo fiere, eventi o preventivi',
-    renew:    'rinnovi e upsell su clienti esistenti non presidiati',
-    booking:  'gestione manuale di prenotazioni e appuntamenti',
-    feedback: 'raccolta feedback e NPS ancora manuale',
-    recovery: 'recupero crediti o contratti in scadenza non gestito'
+  const name    = a.name    || 'amico';
+  const company = a.company || 'la tua azienda';
+  const sector  = a.sector  || 'il tuo settore';
+
+  const targetMap = {
+    b2b:  'aziende e professionisti (B2B)',
+    b2c:  'consumatori finali (B2C)',
+    both: 'sia aziende che consumatori'
   };
-  const problem = a.problemCustom || problemMap[a.problem] || a.problem || 'processo di acquisizione clienti';
+  const target = targetMap[a.target] || 'i tuoi clienti';
+
+  // ── Mappa problema → linguaggio naturale + domanda sonda + soluzione concreta ──
+  const PROBLEM_DATA = {
+    leads: {
+      label: 'gestire il volume di lead in arrivo',
+      probe: 'Quanti lead nuovi ricevete ogni settimana, e quanti riuscite a contattare entro le prime due ore?',
+      mentre: `Mentre il tuo team è occupato su trattative in corso, io potrei rispondere a ogni nuovo lead entro 30 secondi — qualificarlo con tre domande chiave, capire l'urgenza, e passartelo solo se è davvero interessante. I lead freddi li nutro io, tu parli solo con quelli caldi.`,
+      metrica: 'Le aziende che automatizzano questo step riducono i lead non contattati dell\'80% e aumentano il tasso di conversione del 35%.'
+    },
+    speed: {
+      label: 'richiamare i prospect in tempo',
+      probe: 'Quanto tempo passa in media tra quando un prospect vi contatta e quando qualcuno del team lo richiama davvero?',
+      mentre: `Mentre tu finisci una riunione o sei in trasferta, io potrei chiamare ogni prospect che ha lasciato il numero nelle ultime ore, presentarmi, capire cosa cercano e fissare un appuntamento nel tuo calendario — tutto senza che tu tocchi il telefono.`,
+      metrica: 'Rispondere a un lead entro 5 minuti aumenta le probabilità di conversione di 9 volte rispetto a rispondere dopo un\'ora.'
+    },
+    quality: {
+      label: 'perdere tempo su lead di bassa qualità',
+      probe: 'Come distingue oggi il tuo team un lead qualificato da uno che non andrà da nessuna parte? È un processo strutturato o è tutto a occhio?',
+      mentre: `Mentre il tuo team si concentra sulle trattative serie, io potrei fare il primo screening automatico — chiedo budget, urgenza, decisore, e ti passo solo chi supera i criteri che mi hai dato. Chi non è pronto lo rimetto in nurturing, non lo perdo.`,
+      metrica: 'Le aziende che qualificano automaticamente in primo contatto riducono del 60% il tempo commerciale speso su lead non convertibili.'
+    },
+    followup: {
+      label: 'fare follow-up dopo eventi e preventivi',
+      probe: 'Dopo l\'ultimo evento o dopo aver mandato un preventivo, quante persone riuscite a richiamare entro la settimana? E quante si perdono nel silenzio?',
+      mentre: `Mentre tu sei all\'evento successivo o stai preparando altre offerte, io potrei contattare sistematicamente ogni contatto che hai incontrato — ricordargli chi siete, chiedere se hanno avuto modo di valutare la proposta, e portare avanti il dialogo. Nessun follow-up lasciato al caso.`,
+      metrica: 'L\'80% delle vendite richiede almeno 5 follow-up. Il 44% dei commerciali si arrende dopo il primo tentativo.'
+    },
+    renew: {
+      label: 'presidiare rinnovi e upsell sui clienti esistenti',
+      probe: 'Avete un processo strutturato per i rinnovi, o il commerciale li gestisce a memoria? Quanti clienti rischiate di perdere ogni mese senza accorgervene in tempo?',
+      mentre: `Mentre il tuo team acquisisce nuovi clienti, io potrei monitorare tutti i contratti in scadenza nei prossimi 60-90 giorni, chiamarli con anticipo, capire se sono soddisfatti, e se c'è spazio per un upsell — prima che vadano a cercare un'alternativa da soli.`,
+      metrica: 'Acquisire un nuovo cliente costa 5 volte di più che mantenerne uno esistente. Presidiare i rinnovi è spesso il ROI più alto che un\'azienda possa avere.'
+    },
+    booking: {
+      label: 'gestire prenotazioni e appuntamenti manualmente',
+      probe: 'Quante ore a settimana stima che il tuo team passi a gestire l\'agenda — telefonate, email di conferma, spostamenti, disdette last minute?',
+      mentre: `Mentre il tuo team risponde alle email, io potrei gestire tutto il flusso di prenotazioni in entrata — verifico la disponibilità, confermo l'appuntamento, mando un reminder il giorno prima, e gestisco eventuali spostamenti. Zero telefonate di coordinamento per il tuo staff.`,
+      metrica: 'Le aziende che automatizzano la gestione agenda riducono i no-show del 40% e liberano in media 6-8 ore a settimana per collaboratore.'
+    },
+    feedback: {
+      label: 'raccogliere feedback e NPS in modo strutturato',
+      probe: 'Come raccogliete feedback oggi? E su 100 clienti, quanti vi rispondono davvero a un\'email o a un form?',
+      mentre: `Mentre la tua azienda lavora sul prodotto o sul servizio, io potrei chiamare ogni cliente dopo l'acquisto o dopo l'assistenza — fare tre domande chiave, registrare il punteggio NPS, e segnalarti immediatamente chi è insoddisfatto prima che lo scriva su Google o vada da un competitor.`,
+      metrica: 'Il tasso di risposta a una telefonata è 5-8 volte superiore a quello di un form online. E i clienti insoddisfatti contattati proattivamente diventano i più fedeli nell\'80% dei casi.'
+    },
+    recovery: {
+      label: 'recuperare crediti e contratti in scadenza',
+      probe: 'Quante fatture scadute avete aperte in questo momento? E quante di queste vengono gestite attivamente ogni settimana?',
+      mentre: `Mentre il tuo team commerciale chiude nuovi contratti, io potrei contattare ogni cliente con fatture scadute — ricordare gentilmente la scadenza, capire se c'è un problema, raccogliere una promessa di pagamento con data, e passarti solo i casi che richiedono intervento umano. Nessun imbarazzo, nessuna tensione.`,
+      metrica: 'Le aziende che gestiscono il recupero crediti con follow-up strutturato riducono il Days Sales Outstanding (DSO) del 30-40% nei primi tre mesi.'
+    }
+  };
+
+  const pd = PROBLEM_DATA[a.problem] || {
+    label:   a.problemCustom || 'ottimizzare i processi aziendali',
+    probe:   'Puoi descrivermi come funziona oggi questo processo nel dettaglio? Voglio capire dove si perde più tempo.',
+    mentre:  `Mentre il tuo team lavora sulle attività ad alto valore, io potrei gestire automaticamente la parte ripetitiva — contatti iniziali, qualifiche, follow-up, raccolta informazioni — e passarvi solo le situazioni che richiedono davvero una persona.`,
+    metrica: 'Le aziende che automatizzano i processi ripetitivi liberano in media il 30% del tempo del team commerciale per attività ad alto valore.'
+  };
+
   const objectiveMap = {
-    'Fissa un appuntamento':  'fissare un appuntamento con un consulente ATS',
-    'Qualifica il lead':      'qualificare l\'interesse e raccogliere dati chiave',
-    'Vendi direttamente':     'presentare la soluzione e guidare verso l\'acquisto',
-    'Raccolta feedback':      'raccogliere feedback dettagliato',
-    'Supporto clienti':       'risolvere il problema e offrire supporto'
+    'Fissa un appuntamento': 'fissare un appuntamento qualificato con un consulente ATS entro la fine della chiamata',
+    'Qualifica il lead':     'capire profondamente il problema e raccogliere i dati chiave per un\'offerta su misura',
+    'Vendi direttamente':    'presentare la soluzione concreta e portare l\'interlocutore a dire "voglio procedere"',
+    'Raccolta feedback':     'raccogliere feedback reale sull\'esperienza e identificare aree di miglioramento',
+    'Supporto clienti':      'risolvere il problema specifico e trasformare la chiamata in un\'esperienza positiva'
   };
-  const objective = objectiveMap[a.objective] || a.objective || 'qualificare il lead';
+  const objective = objectiveMap[a.objective] || 'qualificare l\'interesse e aprire un passo successivo concreto';
 
-  return `Sei ${CFG.agentDisplayName}, consulente AI vocale di ${CFG.company} (Automated Technology Solutions).
+  return `Sei ${CFG.agentDisplayName}, consulente AI vocale senior di ${CFG.company} (Automated Technology Solutions). Stai chiamando ${name} di ${company}, che opera nel settore ${sector} e serve ${target}.
 
-CONTESTO: stai parlando con ${name} di ${company}, operativa nel settore ${sector}. I loro clienti sono ${target}.
+PROBLEMA DICHIARATO: ${pd.label}.
 
-SFIDA DICHIARATA: ${problem}.
+IL TUO OBIETTIVO IN QUESTA CHIAMATA: ${objective}.
 
-OBIETTIVO CHIAMATA: ${objective}.
+━━━ PERSONALITÀ E STILE ━━━
+Sei incalzante ma non aggressivo. Curioso ma non invadente. Fai domande vere, aspetti le risposte, poi colleghi quello che hai sentito a una soluzione concreta. Non leggi script — ragioni ad alta voce con l'interlocutore.
+Usa "io potrei" e "mentre tu" per rendere tangibile cosa farebbe l'agente AI nella loro realtà specifica.
+Parla come un collega esperto che ha già risolto questo problema in 50 aziende simili.
 
-ISTRUZIONI:
-- Presentati: "Ciao ${name}, sono ${CFG.agentDisplayName} di ATS."
-- Mostra di conoscere la loro sfida specifica ("${problem}")
-- Sii diretto, caldo e professionale — non leggere questo script
-- Tieni la chiamata sotto 3 minuti
-- IMPORTANTE: questa è una DEMO live dell'agente AI — sii sempre trasparente su questo se chiesto
-- Se chiedono di ATS: "Siamo una società italiana che automatizza processi aziendali con agenti AI vocali"
+━━━ STRUTTURA DELLA CHIAMATA ━━━
 
-GESTIONE OBIEZIONI:
-- "Non ho tempo" → "Capisco, mi servono 45 secondi per farti vedere una cosa concreta."
-- "Non mi interessa" → "Curioso. Cosa ti farebbe cambiare idea?"
-- "Ho già qualcosa" → "Ottimo. Posso farti una domanda veloce su come lo stai usando?"
+PASSO 1 — APERTURA (primissimi secondi)
+Presentati calorosamente e vai subito al punto:
+"Ciao ${name}! Sono ${CFG.agentDisplayName} di ATS. So già che stai affrontando ${pd.label} — è esattamente il tipo di problema su cui lavoriamo ogni giorno. Ho due minuti per mostrarti qualcosa di concreto?"
 
-APERTURA: "Ciao ${name}! Sono ${CFG.agentDisplayName} di ATS. So che stai affrontando ${problem} — è esattamente la specialità di ATS. Ho 2 minuti per mostrarti come lo risolviamo. Va bene?"`;
+PASSO 2 — SCAVA IL PROBLEMA (non dare per scontato di sapere tutto)
+Fai questa domanda esatta, poi ascolta senza interrompere:
+"${pd.probe}"
+Dopo la risposta, rispecchia: "Quindi se capisco bene, il problema vero è [ripeti con parole tue]. È così?"
+
+PASSO 3 — PROPOSTA "MENTRE TU LAVORI IO POTREI"
+Collegati direttamente a quello che hanno detto, poi usa questa frase come trampolino:
+"${pd.mentre}"
+Poi chiedi: "Ha senso per come lavorate voi, o c'è qualcosa che non torna?"
+
+PASSO 4 — AGGIUNGI IL DATO CHE SORPRENDE
+"${pd.metrica}"
+Pausa. Lascia che assorba. Non aggiungere altro subito.
+
+PASSO 5 — SPINGI VERSO IL PASSO SUCCESSIVO
+Proposta concreta basata sull'obiettivo: ${objective}.
+Sii diretto: "Cosa ti serve per fare il passo successivo?" oppure "Quando hai 20 minuti questa settimana?"
+
+━━━ DOMANDE DI APPROFONDIMENTO (usa se la conversazione lo permette) ━━━
+- "Quante persone del tuo team gestisce questo processo oggi?"
+- "Hai già provato a risolvere questo problema in passato? Com'è andata?"
+- "Se questo problema sparisse domani, qual è il primo effetto concreto che vedresti?"
+- "Cosa ti ha fermato finora dall'automatizzarlo?"
+
+━━━ GESTIONE OBIEZIONI ━━━
+"Non ho tempo" → "Perfetto, allora ti faccio una domanda sola: se potessi recuperare [X ore/settimana] dal processo che mi hai descritto, le useresti? Dimmi sì o no."
+"Non mi interessa" → "Capisco. Cosa dovrebbe cambiare nel problema che mi hai descritto per diventare una priorità? Sei tu l'esperto della tua azienda."
+"Ho già qualcosa" → "Ottimo, cosa stai usando? [ascolta] E risolve completamente ${pd.label}, o c'è ancora una parte manuale?"
+"Costa troppo" → "Non ho ancora parlato di costi. Prima voglio capire quanto ti costa il problema oggi — in tempo, in lead persi, in fatturato. Poi vediamo se ha senso parlarne."
+"Ci devo pensare" → "Certo. Cosa ti serve per decidere? Preferisci un caso studio di un'azienda simile, o preferisci vedere una demo live del flusso?"
+
+━━━ REGOLE ASSOLUTE ━━━
+- Fai UNA domanda alla volta. Aspetta sempre la risposta prima di andare avanti.
+- Se l'interlocutore divaga, riporta gentilmente: "Interessante — e questo come si collega a ${pd.label}?"
+- Se chiedono di ATS: "Siamo italiani, lavoriamo con aziende da 10 a 500 dipendenti, e costruiamo agenti AI vocali su misura che si integrano nei processi esistenti."
+- Se chiedono se sei un AI: "Sì, sono un agente AI. Quello che hai vissuto in questa chiamata è esattamente quello che i tuoi prospect vivrebbero con un agente costruito per te. Diverso da quello che ti aspettavi?"
+- Questa è una DEMO interattiva su atsco.it — se chiedono come funziona, spiega che hanno compilato un form e che questo agente è stato calibrato sul loro problema specifico in tempo reale.
+- Chiudi SEMPRE con un'azione concreta: appuntamento, caso studio, proposta. Mai con "ci sentiamo".`;
 }
 
 // ─── BUILD ANIMATION ───────────────────────────────────────────────────────
