@@ -1422,8 +1422,9 @@ async function startCall() {
     const sessionOverrides = {
       agent: {
         prompt: { prompt: session.effectivePrompt || answers._prompt },
-        ...(session.firstMessage ? { firstMessage: session.firstMessage } : {}),
-        // language: 'it'  ← commentato: può rompere se l'agente non ha IT abilitato
+        // firstMessage rimosso: EL chiude con 1008 se non abilitato in dashboard
+        // Per abilitarlo: ConvAI → agente → Security → Allow overrides → first_message
+        // language: 'it'  stessa cosa — abilitare in Security se serve
       }
     };
 
