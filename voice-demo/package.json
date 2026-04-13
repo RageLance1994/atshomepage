@@ -1,0 +1,14 @@
+{
+  "name": "ats-voice-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ATS Voice Agent Demo — ElevenLabs ConvAI + morphic orb",
+  "main": "voice-demo-server.js",
+  "scripts": {
+    "start": "node voice-demo-server.js",
+    "dev": "node --watch voice-demo-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATS — Agente AI Vocale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #020209;
+  --purple: #641ffb;
+  --purple2: #9b59fc;
+  --magenta: #c026d3;
+  --cyan: #06b6d4;
+  --white: #f0eeff;
+  --dim: rgba(240,238,255,0.45);
+  --glass: rgba(255,255,255,0.04);
+  --glass-b: rgba(255,255,255,0.09);
+  --r: 20px;
+}
+
+html {
+  width: 100%; height: 100%;
+  /* NON overflow:hidden qui — in Chrome clippa i position:fixed */
+}
+body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--white);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== CANVASES ===== */
+#bg-c { position: fixed; inset: 0; z-index: 0; }
+
+/* ===== SPLIT LAYOUT ===== */
+#layout {
+  position: fixed; inset: 0; z-index: 2;
+  display: flex;
+}
+
+/* LEFT — form & screens */
+#panel-left {
+  flex: 0 0 54%;
+  position: relative;
+  overflow: hidden;
+}
+/* Vertical divider glow */
+#panel-left::after {
+  content: '';
+  position: absolute; top: 0; right: 0; bottom: 0; width: 1px;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(155,89,252,0.35) 20%,
+    rgba(155,89,252,0.35) 80%,
+    transparent 100%);
+  pointer-events: none;
+}
+
+/* RIGHT — orb sempre visibile */
+#panel-right {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  gap: 1.6rem;
+}
+/* Ambient glow dietro l'orb */
+#panel-right::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 90% 90% at 50% 50%, rgba(100,31,251,0.13) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 55% at 50% 48%, rgba(192,38,211,0.07) 0%, transparent 60%);
+  pointer-events: none;
+  animation: orb-bg-pulse 4s ease-in-out infinite;
+}
+@keyframes orb-bg-pulse {
+  0%,100%{ opacity: 0.65; }
+  50%{ opacity: 1.0; }
+}
+
+/* Orb: inside right panel, no fixed pos */
+#orb-wrap {
+  position: relative;
+  width: clamp(200px, 72%, 460px);
+  aspect-ratio: 1;
+  pointer-events: none;
+  transition: filter 0.5s ease;
+}
+#orb-wrap.orb-pulse { filter: brightness(1.5) saturate(1.3); }
+#orb-c { width: 100%; height: 100%; display: block; }
+
+/* Progress dots strip */
+#orb-progress-strip {
+  display: flex; gap: 10px;
+  align-items: center;
+}
+.ops-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.10);
+  transition: all 0.45s cubic-bezier(.4,0,.2,1);
+  position: relative;
+}
+.ops-dot.done {
+  background: var(--purple2);
+  box-shadow: 0 0 10px var(--purple), 0 0 22px rgba(100,31,251,0.4);
+}
+
+/* Orb label */
+#orb-label {
+  font-size: 0.70rem; font-weight: 700;
+  letter-spacing: 0.20em; text-transform: uppercase;
+  color: rgba(155,89,252,0.65);
+  text-align: center;
+  transition: opacity 0.5s ease, color 0.5s ease;
+  min-height: 1em;
+}
+
+/* ===== APP (screens container inside panel-left) ===== */
+#app {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ===== SCREENS ===== */
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 2.5rem 3.2rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.55s ease;
+  overflow-y: auto;
+}
+.screen.active { opacity: 1; pointer-events: all; }
+
+/* ===== WELCOME ===== */
+#s-welcome {
+  gap: 1.8rem;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ===== MOBILE: stack verticale ===== */
+@media (max-width: 780px) {
+  #layout { flex-direction: column; }
+  #panel-left { flex: 0 0 58%; }
+  #panel-right { flex: 0 0 42%; }
+  #panel-left::after { display: none; }
+  #orb-wrap { width: clamp(120px, 44%, 190px); }
+  #orb-label, #orb-progress-strip { display: none; }
+}
+
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--purple2);
+  border: 1px solid rgba(155,89,252,0.4);
+  padding: 6px 16px; border-radius: 99px;
+  background: rgba(100,31,251,0.12);
+  animation: pulse-badge 3s ease-in-out infinite;
+}
+.badge::before {
+  content: '';
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--purple2);
+  box-shadow: 0 0 8px var(--purple2);
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+@keyframes pulse-badge {
+  0%,100%{box-shadow:0 0 0 0 rgba(100,31,251,0)}
+  50%{box-shadow:0 0 20px 4px rgba(100,31,251,0.25)}
+}
+
+.headline {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #fff 0%, #c4b4ff 40%, var(--magenta) 80%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: headline-in 1s cubic-bezier(.4,0,.2,1) both;
+  margin-top: -1rem;
+}
+@keyframes headline-in {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sub {
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  color: var(--dim);
+  line-height: 1.6;
+  max-width: 440px;
+  animation: headline-in 1s 0.2s cubic-bezier(.4,0,.2,1) both;
+}
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 18px 42px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--magenta));
+  border: none; border-radius: 99px;
+  cursor: pointer;
+  box-shadow: 0 0 40px rgba(100,31,251,0.5), 0 0 80px rgba(192,38,211,0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: headline-in 1s 0.4s cubic-bezier(.4,0,.2,1) both;
+}
+.btn-primary:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 0 60px rgba(100,31,251,0.7), 0 0 120px rgba(192,38,211,0.35);
+}
+.btn-primary svg { width: 22px; height: 22px; }
+
+/* ===== QUESTIONS ===== */
+#s-questions { gap: 0; justify-content: center; padding: 80px 3rem 2rem; }
+
+#q-progress {
+  position: absolute;
+  top: 32px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 10px;
+  z-index: 10;
+}
+.q-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  transition: all 0.4s ease;
+}
+.q-dot.done { background: var(--purple2); box-shadow: 0 0 10px var(--purple); }
+.q-dot.active { background: #fff; transform: scale(1.3); box-shadow: 0 0 12px rgba(255,255,255,0.5); }
+
+#q-box {
+  width: 100%; max-width: 600px;
+  padding: 40px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: 28px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  animation: q-in 0.5s cubic-bezier(.4,0,.2,1) both;
+}
+@keyframes q-in {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.q-number {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--purple2);
+  margin-bottom: 16px;
+}
+
+.q-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 28px;
+  color: var(--white);
+}
+
+.q-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem; color: var(--white);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  outline: none;
+  margin-bottom: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.q-input:focus {
+  border-color: var(--purple2);
+  box-shadow: 0 0 0 3px rgba(155,89,252,0.15);
+}
+.q-input::placeholder { color: rgba(240,238,255,0.3); }
+
+.q-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.q-chip {
+  padding: 10px 20px;
+  font-size: 0.9rem; font-weight: 500;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 99px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.04);
+  color: var(--dim);
+  transition: all 0.2s;
+  user-select: none;
+}
+.q-chip:hover { border-color: var(--purple2); color: var(--white); background: rgba(155,89,252,0.1); }
+.q-chip.sel {
+  border-color: var(--purple);
+  background: linear-gradient(135deg, rgba(100,31,251,0.3), rgba(192,38,211,0.2));
+  color: var(--white);
+  box-shadow: 0 0 16px rgba(100,31,251,0.35);
+}
+
+.q-large-btn {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 20px 24px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  cursor: pointer; color: var(--white);
+  font-size: 1rem; font-weight: 500;
+  margin-bottom: 10px;
+  text-align: left;
+  transition: all 0.2s;
+}
+.q-large-btn:hover { border-color: var(--purple2); background: rgba(155,89,252,0.1); }
+.q-large-btn.sel {
+  border-color: var(--purple);
+  background: linear-gradient(135deg, rgba(100,31,251,0.25), rgba(192,38,211,0.15));
+  box-shadow: 0 0 20px rgba(100,31,251,0.3);
+}
+.q-large-btn .icon { font-size: 1.4rem; }
+
+.q-textarea {
+  width: 100%; height: 110px;
+  padding: 14px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem; color: var(--white);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(155,89,252,0.35);
+  border-radius: 12px;
+  outline: none; resize: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  margin-top: 16px;
+  margin-bottom: 0;
+  display: block;
+}
+.q-textarea:focus {
+  border-color: var(--purple2);
+  box-shadow: 0 0 0 3px rgba(155,89,252,0.15);
+}
+.q-textarea::placeholder { color: rgba(240,238,255,0.3); }
+
+.btn-next {
+  display: inline-flex; align-items: center; gap: 10px;
+  margin-top: 20px;
+  padding: 14px 34px;
+  font-size: 0.95rem; font-weight: 700; letter-spacing: 0.05em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--magenta));
+  border: none; border-radius: 99px;
+  cursor: pointer;
+  box-shadow: 0 0 30px rgba(100,31,251,0.4);
+  transition: transform 0.2s, opacity 0.2s;
+}
+.btn-next:hover { transform: translateY(-2px); }
+.btn-next:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* ===== BUILDING ===== */
+#s-building { gap: 2rem; text-align: center; }
+
+.build-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: 0.04em;
+}
+
+#prompt-preview {
+  max-width: 640px; width: 100%;
+  padding: 24px 28px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: rgba(180,220,255,0.7);
+  white-space: pre-wrap;
+  min-height: 180px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.build-status {
+  font-size: 0.85rem; color: var(--dim);
+  animation: pulse-text 1.5s ease-in-out infinite;
+}
+@keyframes pulse-text { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+/* ===== READY ===== */
+#s-ready { gap: 2rem; text-align: center; }
+
+.ready-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, var(--purple2) 60%, var(--magenta) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mic-guide {
+  display: flex; flex-direction: column; gap: 12px;
+  max-width: 420px; width: 100%;
+  padding: 24px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: var(--r);
+}
+.mic-step {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 0.9rem; color: var(--white);
+  opacity: 0;
+  animation: step-in 0.5s ease forwards;
+}
+.mic-step:nth-child(1){ animation-delay: 0.1s; }
+.mic-step:nth-child(2){ animation-delay: 0.3s; }
+.mic-step:nth-child(3){ animation-delay: 0.5s; }
+@keyframes step-in { to { opacity: 1; transform: none; } from { opacity: 0; transform: translateX(-12px); } }
+.mic-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; flex-shrink: 0;
+  background: rgba(100,31,251,0.2);
+  border: 1px solid rgba(100,31,251,0.35);
+}
+
+#btn-call {
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  width: 220px; height: 220px; border-radius: 50%;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.1rem; font-weight: 800; letter-spacing: 0.06em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--magenta) 100%);
+  border: none; cursor: pointer;
+  box-shadow:
+    0 0 60px rgba(100,31,251,0.6),
+    0 0 120px rgba(192,38,211,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: transform 0.3s, box-shadow 0.3s;
+  animation: call-pulse 2.5s ease-in-out infinite;
+}
+#btn-call:hover {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 80px rgba(100,31,251,0.8),
+    0 0 160px rgba(192,38,211,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+  animation: none;
+}
+#btn-call .call-ring {
+  position: absolute; inset: -16px;
+  border-radius: 50%;
+  border: 2px solid rgba(100,31,251,0.4);
+  animation: ring-expand 2.5s ease-in-out infinite;
+}
+#btn-call .call-ring2 {
+  position: absolute; inset: -32px;
+  border-radius: 50%;
+  border: 1px solid rgba(192,38,211,0.2);
+  animation: ring-expand 2.5s 0.6s ease-in-out infinite;
+}
+@keyframes call-pulse {
+  0%,100%{ box-shadow: 0 0 60px rgba(100,31,251,0.6), 0 0 120px rgba(192,38,211,0.3); }
+  50%{ box-shadow: 0 0 80px rgba(100,31,251,0.8), 0 0 160px rgba(192,38,211,0.45); }
+}
+@keyframes ring-expand {
+  0%{ transform: scale(1); opacity: 0.7; }
+  100%{ transform: scale(1.4); opacity: 0; }
+}
+
+/* ===== IN-CALL ===== */
+#s-call { gap: 1.5rem; justify-content: flex-end; padding-bottom: 32px; }
+
+.call-header {
+  position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+}
+#call-status-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 99px;
+  font-size: 0.85rem; font-weight: 500;
+  color: var(--dim);
+  transition: all 0.3s;
+}
+#call-status-badge .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #666;
+  transition: background 0.3s;
+}
+#call-status-badge.connected .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 1.5s infinite; }
+#call-status-badge.listening .dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: blink 0.8s infinite; }
+#call-status-badge.speaking .dot { background: var(--magenta); box-shadow: 0 0 8px var(--magenta); animation: blink 0.5s infinite; }
+
+#transcript {
+  width: 100%; max-width: 540px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155,89,252,0.3) transparent;
+}
+
+.msg {
+  max-width: 82%;
+  padding: 12px 18px;
+  border-radius: 22px;
+  font-size: 0.95rem; line-height: 1.55;
+  animation: msg-in 0.3s ease both;
+}
+@keyframes msg-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.msg.agent { background: rgba(100,31,251,0.2); border: 1px solid rgba(155,89,252,0.25); color: #d8caff; align-self: flex-start; }
+.msg.user { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: var(--white); align-self: flex-end; }
+
+#btn-end {
+  padding: 14px 38px;
+  font-size: 0.9rem; font-weight: 700; letter-spacing: 0.06em;
+  color: #ff6b6b;
+  background: rgba(255,107,107,0.08);
+  border: 1px solid rgba(255,107,107,0.3);
+  border-radius: 99px; cursor: pointer;
+  transition: all 0.2s;
+}
+#btn-end:hover { background: rgba(255,107,107,0.18); border-color: rgba(255,107,107,0.6); }
+
+/* ===== POST-CALL ===== */
+#s-postcall { gap: 1.8rem; text-align: center; }
+
+.post-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, var(--cyan) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.post-card {
+  max-width: 500px; width: 100%;
+  padding: 28px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: 20px;
+  text-align: left;
+}
+.post-card-title {
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--dim);
+  margin-bottom: 10px;
+}
+.post-card-body { font-size: 0.95rem; line-height: 1.65; color: var(--white); }
+
+.cta-outro {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 15px 36px;
+  font-size: 0.95rem; font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--magenta));
+  border: none; border-radius: 99px; cursor: pointer;
+  box-shadow: 0 0 30px rgba(100,31,251,0.4);
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.cta-outro:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(100,31,251,0.6); }
+
+/* ===== SCAN LINE (decoration) ===== */
+.scan-line {
+  position: fixed;
+  left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(155,89,252,0.4), transparent);
+  pointer-events: none;
+  z-index: 0;
+  animation: scan 8s linear infinite;
+  opacity: 0.5;
+}
+@keyframes scan { from{top:-1px} to{top:100vh} }
+
+/* ===== CORNER DECORATIONS ===== */
+.corner { position: fixed; width: 60px; height: 60px; z-index: 0; opacity: 0.25; }
+.corner-tl { top: 24px; left: 24px; border-top: 1px solid var(--purple2); border-left: 1px solid var(--purple2); }
+.corner-tr { top: 24px; right: 24px; border-top: 1px solid var(--purple2); border-right: 1px solid var(--purple2); }
+.corner-bl { bottom: 24px; left: 24px; border-bottom: 1px solid var(--purple2); border-left: 1px solid var(--purple2); }
+.corner-br { bottom: 24px; right: 24px; border-bottom: 1px solid var(--purple2); border-right: 1px solid var(--purple2); }
+
+/* ===== TOAST ===== */
+#toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  padding: 12px 24px; border-radius: 12px;
+  background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.3);
+  color: #ff8888; font-size: 0.88rem;
+  z-index: 100; opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none; max-width: 360px; text-align: center;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Background canvas -->
+<canvas id="bg-c"></canvas>
+
+<!-- Corner decorations -->
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+<div class="scan-line"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Banner file:// -->
+<div id="file-banner" style="
+  display:none; position:fixed; inset:0; z-index:999;
+  background:rgba(2,2,9,0.96); backdrop-filter:blur(12px);
+  align-items:center; justify-content:center; flex-direction:column; gap:20px;
+  font-family:'Inter',sans-serif; text-align:center; padding:2rem;
+">
+  <div style="font-size:2.5rem">⚠️</div>
+  <div style="font-size:1.2rem;font-weight:700;color:#f0eeff;">Apri la pagina dal server</div>
+  <div style="font-size:0.95rem;color:rgba(240,238,255,0.55);max-width:420px;line-height:1.6;">
+    Questa demo non funziona aperta come file locale.<br>
+    Avvia il server con <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;">npm start</code>
+    e aprila su <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;">http://localhost:3000/demo</code>
+  </div>
+</div>
+
+<!-- SPLIT LAYOUT -->
+<div id="layout">
+
+<!-- LEFT PANEL: screens -->
+<div id="panel-left">
+<div id="app">
+
+  <!-- ① WELCOME -->
+  <div id="s-welcome" class="screen active">
+    <div class="badge">Demo Interattiva</div>
+    <h1 class="headline">Parla.<br>Noi<br>Ascoltiamo.</h1>
+    <p class="sub">In 60 secondi costruiamo un agente AI vocale<br>personalizzato sul tuo problema reale.</p>
+    <button class="btn-primary" id="btn-start">
+      Inizia l'esperienza
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+
+  <!-- ② QUESTIONS -->
+  <div id="s-questions" class="screen">
+    <div id="q-progress"></div>
+    <div id="q-box">
+      <!-- dynamically filled -->
+    </div>
+  </div>
+
+  <!-- ③ BUILDING -->
+  <div id="s-building" class="screen">
+    <div class="build-label">Sto costruendo il tuo agente...</div>
+    <div id="prompt-preview"></div>
+    <div class="build-status" id="build-status">Analisi delle risposte in corso...</div>
+  </div>
+
+  <!-- ④ READY -->
+  <div id="s-ready" class="screen">
+    <div class="ready-title">Il tuo agente<br>è pronto.</div>
+    <div class="mic-guide">
+      <div class="mic-step"><div class="mic-icon">🎙️</div><span>Quando clicchi <strong>CHIAMA</strong>, il browser chiederà accesso al microfono</span></div>
+      <div class="mic-step"><div class="mic-icon">✅</div><span>Clicca <strong>Consenti</strong> sul popup che apparirà in alto a sinistra</span></div>
+      <div class="mic-step"><div class="mic-icon">🔊</div><span>Assicurati che il volume sia alzato e le cuffie connesse</span></div>
+    </div>
+    <button id="btn-call">
+      <div class="call-ring"></div>
+      <div class="call-ring2"></div>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+      CHIAMA ORA
+    </button>
+  </div>
+
+  <!-- ⑤ IN-CALL -->
+  <div id="s-call" class="screen">
+    <div class="call-header">
+      <div id="call-status-badge">
+        <div class="dot"></div>
+        <span id="call-status-text">Connessione...</span>
+      </div>
+    </div>
+    <div id="transcript"></div>
+    <button id="btn-end">⬛ Termina chiamata</button>
+  </div>
+
+  <!-- ⑥ POST-CALL -->
+  <div id="s-postcall" class="screen">
+    <div class="post-title">Chiamata completata.</div>
+    <div class="post-card" id="post-summary">
+      <div class="post-card-title">Riepilogo</div>
+      <div class="post-card-body" id="post-body">Caricamento analisi...</div>
+    </div>
+    <a href="https://atsco.it" class="cta-outro">
+      Vuoi un agente come questo?
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+    <button id="btn-restart" style="background:none;border:none;color:var(--dim);font-size:0.85rem;cursor:pointer;text-decoration:underline;margin-top:-8px;">
+      Ricomincia la demo
+    </button>
+  </div>
+
+</div><!-- #app -->
+</div><!-- #panel-left -->
+
+<!-- RIGHT PANEL: orb -->
+<div id="panel-right">
+  <div id="orb-wrap">
+    <canvas id="orb-c"></canvas>
+  </div>
+  <div id="orb-progress-strip"></div>
+  <div id="orb-label">Il tuo agente ti aspetta</div>
+</div><!-- #panel-right -->
+
+</div><!-- #layout -->
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script type="module">
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const CFG = {
+  sessionEndpoint: '/api/voice-demo/session',
+  agentDisplayName: 'Alex',
+  company: 'ATS'
+};
+
+// ─── IMPORTS ───────────────────────────────────────────────────────────────
+let Conversation;
+try {
+  const mod = await import('https://esm.sh/@elevenlabs/client@latest');
+  Conversation = mod.Conversation;
+} catch(e) {
+  console.warn('ElevenLabs SDK not loaded:', e);
+}
+
+// ─── NOISE GLSL ────────────────────────────────────────────────────────────
+const NOISE = `
+vec3 nm289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 nm289v4(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 nperm(vec4 x){return nm289v4(((x*34.)+10.)*x);}
+vec4 ntis(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.);
+  const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy));
+  vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz);
+  vec3 l=1.-g;
+  vec3 i1=min(g.xyz,l.zxy);
+  vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx;
+  vec3 x2=x0-i2+C.yyy;
+  vec3 x3=x0-D.yyy;
+  i=nm289(i);
+  vec4 p=nperm(nperm(nperm(
+    i.z+vec4(0.,i1.z,i2.z,1.))
+    +i.y+vec4(0.,i1.y,i2.y,1.))
+    +i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857;
+  vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z);
+  vec4 x_=floor(j*ns.z);
+  vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy;
+  vec4 y=y_*ns.x+ns.yyyy;
+  vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy);
+  vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.;
+  vec4 s1=floor(b1)*2.+1.;
+  vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+  vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x);
+  vec3 p1=vec3(a0.zw,h.y);
+  vec3 p2=vec3(a1.xy,h.z);
+  vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=ntis(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
+  m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+// ─── ORB (Three.js) ────────────────────────────────────────────────────────
+class MorphicOrb {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.state = 'idle';  // idle | listening | speaking
+    this.targetAmp = 0.08;
+    this.targetFreq = 2.2;
+    this.targetSpeed = 0.25;
+    this.currentAmp = 0.08;
+    this.currentFreq = 2.2;
+    this.currentSpeed = 0.25;
+    this._setup();
+    this._animate();
+  }
+
+  _setup() {
+    const w = this.canvas.offsetWidth || 560;
+    const h = this.canvas.offsetHeight || 560;
+
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+    // z=4.5: glow occupa ~65% canvas (era 98% con z=3 → veniva clippato)
+    this.camera.position.z = 4.5;
+
+    const vs = `
+      ${NOISE}
+      uniform float uTime;
+      uniform float uAmp;
+      uniform float uFreq;
+      uniform float uSpeed;
+      varying vec3 vNormal;
+      varying vec3 vPos;
+      varying float vN;
+      void main(){
+        float n = snoise(position * uFreq + uTime * uSpeed * 0.4);
+        n += 0.5 * snoise(position * uFreq * 2.1 + uTime * uSpeed * 0.7);
+        n += 0.25 * snoise(position * uFreq * 4.3 + uTime * uSpeed * 1.1);
+        n /= 1.75;
+        vec3 np = position + normal * n * uAmp;
+        vNormal = normalize(normalMatrix * normal);
+        vPos = np;
+        vN = n * 0.5 + 0.5;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(np, 1.0);
+      }
+    `;
+
+    const fs = `
+      uniform float uTime;
+      uniform float uState;    // 0=idle 1=listening 2=speaking
+      uniform float uProgress; // 0=inizio, 1=agente configurato
+      uniform float uPulse;    // 0→1, decade ogni frame
+      varying vec3 vNormal;
+      varying vec3 vPos;
+      varying float vN;
+      void main(){
+        vec3 vd = normalize(cameraPosition - vPos);
+        float fr = 1.0 - max(0.0, dot(vd, vNormal));
+        fr = pow(fr, 1.8);
+
+        // Palette idle si sposta purple → cyan man mano che il form viene riempito
+        vec3 cIdle1   = mix(vec3(0.39, 0.12, 0.98), vec3(0.04, 0.71, 0.83), uProgress * 0.65);
+        vec3 cIdle2   = mix(vec3(0.75, 0.15, 0.83), vec3(0.18, 0.48, 0.96), uProgress * 0.50);
+        vec3 cListen1 = vec3(0.04, 0.71, 0.83);
+        vec3 cListen2 = vec3(0.39, 0.12, 0.98);
+        vec3 cSpeak1  = vec3(0.88, 0.05, 0.72);
+        vec3 cSpeak2  = vec3(0.39, 0.12, 0.98);
+
+        vec3 c1 = mix(mix(cIdle1, cListen1, clamp(uState,0.,1.)), cSpeak1, clamp(uState-1.,0.,1.));
+        vec3 c2 = mix(mix(cIdle2, cListen2, clamp(uState,0.,1.)), cSpeak2, clamp(uState-1.,0.,1.));
+
+        vec3 col = mix(c1, c2, vN);
+        col = mix(col, c1 * 1.6, fr * 0.5);
+
+        // Iridescenza
+        float t = uTime * 0.15;
+        float ir = sin(vN * 6.28 + t) * 0.15;
+        col += ir * vec3(0.4, 0.2, 0.8);
+
+        // Pulse flash su risposta selezionata
+        col += uPulse * vec3(0.55, 0.35, 1.0) * (fr + 0.18);
+
+        float alpha = mix(0.72, 1.0, 1.0 - fr * 0.4) + uPulse * 0.12;
+        gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+      }
+    `;
+
+    this.mat = new THREE.ShaderMaterial({
+      vertexShader: vs,
+      fragmentShader: fs,
+      transparent: true,
+      uniforms: {
+        uTime:     { value: 0 },
+        uAmp:      { value: 0.08 },
+        uFreq:     { value: 2.2 },
+        uSpeed:    { value: 0.25 },
+        uState:    { value: 0 },
+        uProgress: { value: 0 },
+        uPulse:    { value: 0 }
+      }
+    });
+
+    const geo = new THREE.SphereGeometry(1, 72, 72);
+    this.mesh = new THREE.Mesh(geo, this.mat);
+    this.scene.add(this.mesh);
+
+    // Glow sphere
+    const glowMat = new THREE.ShaderMaterial({
+      vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader: `
+        uniform float uState;
+        varying vec3 vN;
+        void main(){
+          vec3 vd=normalize(cameraPosition-vec3(0.));
+          float fr=1.-max(0.,dot(vd,vN));
+          fr=pow(fr,3.);
+          vec3 c=mix(vec3(0.39,0.12,0.98), mix(vec3(0.04,0.71,0.83),vec3(0.88,0.05,0.72),clamp(uState-1.,0.,1.)), clamp(uState,0.,1.));
+          gl_FragColor=vec4(c,fr*0.5);
+        }
+      `,
+      transparent: true,
+      side: THREE.BackSide,
+      uniforms: { uState: { value: 0 } }
+    });
+    const glowMesh = new THREE.Mesh(new THREE.SphereGeometry(1.22, 32, 32), glowMat);
+    this.scene.add(glowMesh);
+    this.glowMat = glowMat;
+
+    this.clock = new THREE.Clock();
+
+    // Resize: aggiorna il renderer sia su window resize che su
+    // cambio dimensione CSS (es. clamp che scala con vmin)
+    const onResize = () => {
+      const W = this.canvas.offsetWidth  || this.canvas.parentElement?.offsetWidth  || 400;
+      const H = this.canvas.offsetHeight || this.canvas.parentElement?.offsetHeight || 400;
+      if (W < 1 || H < 1) return;
+      this.camera.aspect = W / H;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(W, H);
+    };
+    window.addEventListener('resize', onResize);
+    if (window.ResizeObserver) {
+      new ResizeObserver(onResize).observe(this.canvas.parentElement);
+    }
+  }
+
+  setState(s) {
+    this.state = s;
+    const t = this._progressT || 0;
+    // Idle diventa più energico man mano che il form viene riempito
+    const map = {
+      idle:      { amp: 0.08 + t * 0.12, freq: 2.2 + t * 0.9, speed: 0.25 + t * 0.28, sv: 0 },
+      listening: { amp: 0.28, freq: 3.8, speed: 0.90, sv: 1 },
+      speaking:  { amp: 0.38, freq: 4.5, speed: 1.30, sv: 2 }
+    };
+    const p = map[s] || map.idle;
+    this.targetAmp = p.amp;
+    this.targetFreq = p.freq;
+    this.targetSpeed = p.speed;
+    this._targetStateVal = p.sv;
+  }
+
+  setProgress(n) { // n: 0..QUESTIONS.length
+    this._progressT = Math.min(1, n / 5);
+    if (this.mat) {
+      this.mat.uniforms.uProgress.value = this._progressT;
+    }
+    // Re-calcola target se in stato idle
+    if (this.state === 'idle') this.setState('idle');
+    // Aggiorna dots nel panel-right
+    const strip = document.getElementById('orb-progress-strip');
+    if (strip) {
+      strip.querySelectorAll('.ops-dot').forEach((d, i) => {
+        d.classList.toggle('done', i < n);
+      });
+    }
+  }
+
+  pulse() {
+    if (this.mat) this.mat.uniforms.uPulse.value = 1.0;
+    const el = document.getElementById('orb-wrap');
+    if (el) {
+      el.classList.add('orb-pulse');
+      setTimeout(() => el.classList.remove('orb-pulse'), 500);
+    }
+  }
+
+  _lerp(a, b, t) { return a + (b - a) * t; }
+
+  _animate() {
+    requestAnimationFrame(() => this._animate());
+    const t = this.clock.getElapsedTime();
+
+    // Smooth lerp
+    const sp = 0.04;
+    this.currentAmp = this._lerp(this.currentAmp, this.targetAmp, sp);
+    this.currentFreq = this._lerp(this.currentFreq, this.targetFreq, sp);
+    this.currentSpeed = this._lerp(this.currentSpeed, this.targetSpeed, sp);
+    const sv = this._targetStateVal ?? 0;
+    this.mat.uniforms.uState.value = this._lerp(this.mat.uniforms.uState.value || 0, sv, 0.04);
+    if (this.glowMat) this.glowMat.uniforms.uState.value = this.mat.uniforms.uState.value;
+
+    // Decay pulse flash
+    if (this.mat.uniforms.uPulse.value > 0) {
+      this.mat.uniforms.uPulse.value = Math.max(0, this.mat.uniforms.uPulse.value - 0.05);
+    }
+
+    this.mat.uniforms.uTime.value = t;
+    this.mat.uniforms.uAmp.value = this.currentAmp;
+    this.mat.uniforms.uFreq.value = this.currentFreq;
+    this.mat.uniforms.uSpeed.value = this.currentSpeed;
+
+    this.mesh.rotation.y = t * 0.06;
+    this.mesh.rotation.x = Math.sin(t * 0.07) * 0.08;
+
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+// ─── BACKGROUND PARTICLES ──────────────────────────────────────────────────
+function initBg(canvas) {
+  const ctx = canvas.getContext('2d');
+  let W, H, stars = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    stars = Array.from({ length: 180 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 1.2 + 0.2,
+      a: Math.random(),
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      pulse: Math.random() * Math.PI * 2
+    }));
+  }
+
+  function draw(ts) {
+    requestAnimationFrame(draw);
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      s.x = (s.x + s.vx + W) % W;
+      s.y = (s.y + s.vy + H) % H;
+      s.pulse += 0.012;
+      const alpha = (0.2 + Math.sin(s.pulse) * 0.15) * s.a;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,160,255,${alpha})`;
+      ctx.fill();
+    }
+  }
+
+  window.addEventListener('resize', resize);
+  resize(); draw(0);
+}
+
+// ─── QUESTIONS ─────────────────────────────────────────────────────────────
+const QUESTIONS = [
+  {
+    id: 'identity',
+    text: 'Prima di tutto... come ti chiami?',
+    type: 'inputs',
+    inputs: [
+      { key: 'name',    placeholder: 'Il tuo nome', icon: '👤' },
+      { key: 'company', placeholder: 'Nome della tua azienda', icon: '🏢' }
+    ]
+  },
+  {
+    id: 'sector',
+    text: 'In quale settore opera la tua azienda?',
+    type: 'chips',
+    chips: ['Tecnologia / SaaS', 'Automotive', 'Retail / E-commerce', 'Manifattura', 'Sanità', 'Finanza', 'Immobiliare', 'Altro']
+  },
+  {
+    id: 'problem',
+    text: 'Qual è la sfida più grande che vuoi risolvere?',
+    type: 'large-btns',
+    options: [
+      { key: 'leads',    icon: '📥', text: 'Non riesco a gestire tutti i lead in arrivo' },
+      { key: 'speed',    icon: '⚡', text: 'I prospect non vengono ricontattati in tempo' },
+      { key: 'quality',  icon: '🎯', text: 'Il team perde tempo su lead di bassa qualità' },
+      { key: 'followup', icon: '📞', text: 'Follow-up dopo fiera, evento o preventivo' },
+      { key: 'renew',    icon: '🔄', text: 'Rinnovi e upsell su clienti esistenti' },
+      { key: 'booking',  icon: '📅', text: 'Prenotazioni, appuntamenti e promemoria' },
+      { key: 'feedback', icon: '💬', text: 'Raccolta feedback e NPS vocale' },
+      { key: 'recovery', icon: '💳', text: 'Recupero crediti o contratti in scadenza' },
+      { key: 'custom',   icon: '✏️', text: 'Altro...' }
+    ]
+  },
+  {
+    id: 'target',
+    text: 'I tuoi clienti sono...',
+    type: 'large-btns',
+    options: [
+      { key: 'b2b', icon: '🏢', text: 'Aziende (B2B)' },
+      { key: 'b2c', icon: '👤', text: 'Consumatori finali (B2C)' },
+      { key: 'both', icon: '🔀', text: 'Entrambi' }
+    ]
+  },
+  {
+    id: 'objective',
+    text: 'Cosa deve ottenere l\'agente dalla chiamata?',
+    type: 'chips',
+    chips: ['Fissa un appuntamento', 'Qualifica il lead', 'Vendi direttamente', 'Raccolta feedback', 'Supporto clienti']
+  }
+];
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+const answers = {};
+let currentQ = 0;
+let orb, convRef = null;
+
+// ─── UTILS ─────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function setOrbLabel(text) {
+  const el = document.getElementById('orb-label');
+  if (el) el.textContent = text;
+}
+
+function toast(msg, dur = 4000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function updateProgress(current, total) {
+  const container = document.getElementById('q-progress');
+  container.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'q-dot' + (i < current ? ' done' : i === current ? ' active' : '');
+    container.appendChild(d);
+  }
+}
+
+// ─── RENDER QUESTION ───────────────────────────────────────────────────────
+function renderQuestion(idx) {
+  const q = QUESTIONS[idx];
+  const box = document.getElementById('q-box');
+  updateProgress(idx, QUESTIONS.length);
+
+  let html = `<div class="q-number">Domanda ${idx + 1} di ${QUESTIONS.length}</div>`;
+  html += `<div class="q-text">${q.text}</div>`;
+
+  if (q.type === 'inputs') {
+    for (const inp of q.inputs) {
+      html += `<input class="q-input" id="qi-${inp.key}" placeholder="${inp.placeholder}" autocomplete="off" value="${answers[inp.key] || ''}">`;
+    }
+  } else if (q.type === 'chips') {
+    html += `<div class="q-chips" id="q-chips">`;
+    for (const c of q.chips) {
+      const sel = answers[q.id] === c ? ' sel' : '';
+      html += `<div class="q-chip${sel}" data-val="${c}">${c}</div>`;
+    }
+    html += `</div>`;
+    if (q.id === 'problem' && answers.problem === 'Altro...') {
+      html += `<textarea class="q-textarea" id="q-custom-problem" placeholder="Descrivi brevemente il tuo problema...">${answers.problemCustom || ''}</textarea>`;
+    }
+  } else if (q.type === 'large-btns') {
+    for (const opt of q.options) {
+      const sel = answers[q.id] === opt.key ? ' sel' : '';
+      html += `<button class="q-large-btn${sel}" data-val="${opt.key}"><span class="icon">${opt.icon}</span><span>${opt.text}</span></button>`;
+    }
+    if (q.id === 'problem' && answers.problem === 'custom') {
+      html += `<textarea class="q-textarea" id="q-custom-problem" placeholder="Descrivi brevemente il tuo problema...">${answers.problemCustom || ''}</textarea>`;
+    }
+  }
+
+  const isLast = idx === QUESTIONS.length - 1;
+  html += `<button class="btn-next" id="btn-next">${isLast ? 'Costruisci il mio agente →' : 'Avanti →'}</button>`;
+
+  box.innerHTML = html;
+  box.style.animation = 'none';
+  requestAnimationFrame(() => { box.style.animation = ''; });
+
+  // Wire chips
+  box.querySelectorAll('.q-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      box.querySelectorAll('.q-chip').forEach(c => c.classList.remove('sel'));
+      chip.classList.add('sel');
+      answers[q.id] = chip.dataset.val;
+      orb.pulse();
+      // Show custom textarea if Altro
+      if (q.id === 'problem' && chip.dataset.val === 'Altro...') {
+        if (!box.querySelector('#q-custom-problem')) {
+          const ta = document.createElement('textarea');
+          ta.className = 'q-textarea'; ta.id = 'q-custom-problem';
+          ta.placeholder = 'Descrivi brevemente il tuo problema...';
+          box.querySelector('.q-chips').after(ta);
+        }
+      } else {
+        const ta = box.querySelector('#q-custom-problem');
+        if (ta) ta.remove();
+      }
+    });
+  });
+
+  // Wire large-btns
+  box.querySelectorAll('.q-large-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      box.querySelectorAll('.q-large-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+      answers[q.id] = btn.dataset.val;
+      orb.pulse();
+      if (q.id === 'problem' && btn.dataset.val === 'custom') {
+        if (!box.querySelector('#q-custom-problem')) {
+          const ta = document.createElement('textarea');
+          ta.className = 'q-textarea'; ta.id = 'q-custom-problem';
+          ta.placeholder = 'Descrivi brevemente il tuo problema specifico...';
+          ta.value = answers.problemCustom || '';
+          // Inserisci PRIMA del bottone Avanti, non dopo
+          const nb = box.querySelector('#btn-next');
+          if (nb) nb.before(ta);
+          else box.appendChild(ta);
+          setTimeout(() => ta.focus(), 50);
+        }
+      } else {
+        const ta = box.querySelector('#q-custom-problem');
+        if (ta) ta.remove();
+      }
+    });
+  });
+
+  // Wire next button
+  document.getElementById('btn-next').addEventListener('click', () => {
+    // Validate
+    if (q.type === 'inputs') {
+      for (const inp of q.inputs) {
+        const val = document.getElementById(`qi-${inp.key}`)?.value.trim();
+        if (!val) { toast(`Inserisci ${inp.placeholder.toLowerCase()}`); return; }
+        answers[inp.key] = val;
+      }
+    } else {
+      if (!answers[q.id]) { toast('Seleziona un\'opzione per continuare'); return; }
+      if ((q.id === 'problem') && (answers[q.id] === 'Altro...' || answers[q.id] === 'custom')) {
+        const ta = document.getElementById('q-custom-problem');
+        if (!ta?.value.trim()) { toast('Descrivi il tuo problema'); return; }
+        answers.problemCustom = ta.value.trim();
+      }
+    }
+
+    if (idx < QUESTIONS.length - 1) {
+      currentQ++;
+      orb.setProgress(currentQ);
+      orb.pulse();
+      renderQuestion(currentQ);
+    } else {
+      orb.setProgress(QUESTIONS.length);
+      orb.pulse();
+      startBuilding();
+    }
+  });
+}
+
+// ─── PROMPT BUILDER ────────────────────────────────────────────────────────
+// Produce SOLO il contesto sessione-specifico.
+// La personalità, lo stile e le regole vivono nel system prompt della dashboard ElevenLabs
+// e NON devono essere sovrascritti — altrimenti l'agente si comporta diversamente.
+function buildPrompt(a) {
+  const name    = a.name    || 'il visitatore';
+  const company = a.company || 'la sua azienda';
+  const sector  = a.sector  || 'settore non specificato';
+
+  const targetMap = {
+    b2b:  'aziende e professionisti (B2B)',
+    b2c:  'consumatori finali (B2C)',
+    both: 'sia aziende che consumatori'
+  };
+  const target = targetMap[a.target] || 'i suoi clienti';
+
+  // ── Mappa problema → linguaggio naturale + domanda sonda + soluzione concreta ──
+  const PROBLEM_DATA = {
+    leads: {
+      label: 'gestire il volume di lead in arrivo',
+      probe: 'Quanti lead nuovi ricevete ogni settimana, e quanti riuscite a contattare entro le prime due ore?',
+      mentre: `Mentre il tuo team è occupato su trattative in corso, io potrei rispondere a ogni nuovo lead entro 30 secondi — qualificarlo con tre domande chiave, capire l'urgenza, e passartelo solo se è davvero interessante. I lead freddi li nutro io, tu parli solo con quelli caldi.`,
+      metrica: 'Le aziende che automatizzano questo step riducono i lead non contattati dell\'80% e aumentano il tasso di conversione del 35%.'
+    },
+    speed: {
+      label: 'richiamare i prospect in tempo',
+      probe: 'Quanto tempo passa in media tra quando un prospect vi contatta e quando qualcuno del team lo richiama davvero?',
+      mentre: `Mentre tu finisci una riunione o sei in trasferta, io potrei chiamare ogni prospect che ha lasciato il numero nelle ultime ore, presentarmi, capire cosa cercano e fissare un appuntamento nel tuo calendario — tutto senza che tu tocchi il telefono.`,
+      metrica: 'Rispondere a un lead entro 5 minuti aumenta le probabilità di conversione di 9 volte rispetto a rispondere dopo un\'ora.'
+    },
+    quality: {
+      label: 'perdere tempo su lead di bassa qualità',
+      probe: 'Come distingue oggi il tuo team un lead qualificato da uno che non andrà da nessuna parte? È un processo strutturato o è tutto a occhio?',
+      mentre: `Mentre il tuo team si concentra sulle trattative serie, io potrei fare il primo screening automatico — chiedo budget, urgenza, decisore, e ti passo solo chi supera i criteri che mi hai dato. Chi non è pronto lo rimetto in nurturing, non lo perdo.`,
+      metrica: 'Le aziende che qualificano automaticamente in primo contatto riducono del 60% il tempo commerciale speso su lead non convertibili.'
+    },
+    followup: {
+      label: 'fare follow-up dopo eventi e preventivi',
+      probe: 'Dopo l\'ultimo evento o dopo aver mandato un preventivo, quante persone riuscite a richiamare entro la settimana? E quante si perdono nel silenzio?',
+      mentre: `Mentre tu sei all\'evento successivo o stai preparando altre offerte, io potrei contattare sistematicamente ogni contatto che hai incontrato — ricordargli chi siete, chiedere se hanno avuto modo di valutare la proposta, e portare avanti il dialogo. Nessun follow-up lasciato al caso.`,
+      metrica: 'L\'80% delle vendite richiede almeno 5 follow-up. Il 44% dei commerciali si arrende dopo il primo tentativo.'
+    },
+    renew: {
+      label: 'presidiare rinnovi e upsell sui clienti esistenti',
+      probe: 'Avete un processo strutturato per i rinnovi, o il commerciale li gestisce a memoria? Quanti clienti rischiate di perdere ogni mese senza accorgervene in tempo?',
+      mentre: `Mentre il tuo team acquisisce nuovi clienti, io potrei monitorare tutti i contratti in scadenza nei prossimi 60-90 giorni, chiamarli con anticipo, capire se sono soddisfatti, e se c'è spazio per un upsell — prima che vadano a cercare un'alternativa da soli.`,
+      metrica: 'Acquisire un nuovo cliente costa 5 volte di più che mantenerne uno esistente. Presidiare i rinnovi è spesso il ROI più alto che un\'azienda possa avere.'
+    },
+    booking: {
+      label: 'gestire prenotazioni e appuntamenti manualmente',
+      probe: 'Quante ore a settimana stima che il tuo team passi a gestire l\'agenda — telefonate, email di conferma, spostamenti, disdette last minute?',
+      mentre: `Mentre il tuo team risponde alle email, io potrei gestire tutto il flusso di prenotazioni in entrata — verifico la disponibilità, confermo l'appuntamento, mando un reminder il giorno prima, e gestisco eventuali spostamenti. Zero telefonate di coordinamento per il tuo staff.`,
+      metrica: 'Le aziende che automatizzano la gestione agenda riducono i no-show del 40% e liberano in media 6-8 ore a settimana per collaboratore.'
+    },
+    feedback: {
+      label: 'raccogliere feedback e NPS in modo strutturato',
+      probe: 'Come raccogliete feedback oggi? E su 100 clienti, quanti vi rispondono davvero a un\'email o a un form?',
+      mentre: `Mentre la tua azienda lavora sul prodotto o sul servizio, io potrei chiamare ogni cliente dopo l'acquisto o dopo l'assistenza — fare tre domande chiave, registrare il punteggio NPS, e segnalarti immediatamente chi è insoddisfatto prima che lo scriva su Google o vada da un competitor.`,
+      metrica: 'Il tasso di risposta a una telefonata è 5-8 volte superiore a quello di un form online. E i clienti insoddisfatti contattati proattivamente diventano i più fedeli nell\'80% dei casi.'
+    },
+    recovery: {
+      label: 'recuperare crediti e contratti in scadenza',
+      probe: 'Quante fatture scadute avete aperte in questo momento? E quante di queste vengono gestite attivamente ogni settimana?',
+      mentre: `Mentre il tuo team commerciale chiude nuovi contratti, io potrei contattare ogni cliente con fatture scadute — ricordare gentilmente la scadenza, capire se c'è un problema, raccogliere una promessa di pagamento con data, e passarti solo i casi che richiedono intervento umano. Nessun imbarazzo, nessuna tensione.`,
+      metrica: 'Le aziende che gestiscono il recupero crediti con follow-up strutturato riducono il Days Sales Outstanding (DSO) del 30-40% nei primi tre mesi.'
+    }
+  };
+
+  const pd = PROBLEM_DATA[a.problem] || {
+    label:   a.problemCustom || 'ottimizzare i processi aziendali',
+    probe:   'Puoi descrivermi come funziona oggi questo processo nel dettaglio? Voglio capire dove si perde più tempo.',
+    mentre:  `Mentre il tuo team lavora sulle attività ad alto valore, io potrei gestire automaticamente la parte ripetitiva — contatti iniziali, qualifiche, follow-up, raccolta informazioni — e passarvi solo le situazioni che richiedono davvero una persona.`,
+    metrica: 'Le aziende che automatizzano i processi ripetitivi liberano in media il 30% del tempo del team commerciale per attività ad alto valore.'
+  };
+
+  const objectiveMap = {
+    'Fissa un appuntamento': 'fissare un appuntamento qualificato con un consulente ATS entro la fine della chiamata',
+    'Qualifica il lead':     'capire profondamente il problema e raccogliere i dati chiave per un\'offerta su misura',
+    'Vendi direttamente':    'presentare la soluzione concreta e portare l\'interlocutore a dire "voglio procedere"',
+    'Raccolta feedback':     'raccogliere feedback reale sull\'esperienza e identificare aree di miglioramento',
+    'Supporto clienti':      'risolvere il problema specifico e trasformare la chiamata in un\'esperienza positiva'
+  };
+  const objective = objectiveMap[a.objective] || 'qualificare l\'interesse e aprire un passo successivo concreto';
+
+  // Solo contesto sessione — niente personalità, stile o regole
+  // (vivono nel system prompt della dashboard ElevenLabs)
+  return `CONTESTO SESSIONE:
+Nome: ${name}
+Azienda: ${company}
+Settore: ${sector}
+Clienti: ${target}
+Obiettivo chiamata: ${objective}
+
+PROBLEMA DICHIARATO: ${pd.label}
+
+DOMANDA DI APPROFONDIMENTO DA FARE: ${pd.probe}
+
+PROPOSTA CONCRETA (usa "mentre tu lavori io potrei"): ${pd.mentre}
+
+DATO DI IMPATTO DA CITARE: ${pd.metrica}`;
+}
+
+// ─── BUILD ANIMATION ───────────────────────────────────────────────────────
+async function startBuilding() {
+  orb.setState('listening');
+  setOrbLabel('Costruendo il tuo agente...');
+  showScreen('s-building');
+
+  const prompt = buildPrompt(answers);
+  const preview = document.getElementById('prompt-preview');
+  const status = document.getElementById('build-status');
+
+  const statusTexts = [
+    'Analisi delle risposte in corso...',
+    'Configurazione personalità agente...',
+    'Ottimizzazione script apertura...',
+    'Caricamento gestione obiezioni...',
+    'Agente pronto! ✨'
+  ];
+
+  // Status labels sincronizzati con la durata reale della scrittura (~1.8s)
+  let si = 0;
+  const STATUS_INTERVAL = 420;
+  const statusInterval = setInterval(() => {
+    if (si < statusTexts.length - 1) status.textContent = statusTexts[++si];
+    else clearInterval(statusInterval);
+  }, STATUS_INTERVAL);
+
+  // Typewriter veloce: 8 caratteri per tick ogni 12ms → ~1.8s per 1200 chars
+  // Ultimi 40 caratteri rallentano a 1/tick per effetto "assestamento"
+  const TAIL = 40;
+  let i = 0;
+  preview.textContent = '';
+  await new Promise(resolve => {
+    const interval = setInterval(() => {
+      const remaining = prompt.length - i;
+      if (remaining <= 0) { clearInterval(interval); resolve(); return; }
+      const batch = remaining <= TAIL ? 1 : 8;
+      preview.textContent += prompt.slice(i, i + batch);
+      i += batch;
+      preview.scrollTop = preview.scrollHeight;
+    }, 12);
+  });
+
+  answers._prompt = prompt;
+
+  await new Promise(r => setTimeout(r, 400));
+  orb.setState('idle');
+  setOrbLabel('Pronto per la chiamata');
+  showScreen('s-ready');
+}
+
+// ─── CALL ──────────────────────────────────────────────────────────────────
+async function startCall() {
+  if (!Conversation) {
+    toast('SDK ElevenLabs non disponibile. Verifica la connessione.');
+    return;
+  }
+
+  showScreen('s-call');
+  const badge = document.getElementById('call-status-badge');
+  const statusText = document.getElementById('call-status-text');
+  const transcript = document.getElementById('transcript');
+
+  statusText.textContent = 'Connessione...';
+
+  function addMsg(speaker, text) {
+    const d = document.createElement('div');
+    d.className = `msg ${speaker}`;
+    d.textContent = text;
+    transcript.appendChild(d);
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  try {
+    // Request mic first
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // Get signed URL from backend
+    const sessionRes = await fetch(CFG.sessionEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        promptDraft: answers._prompt,
+        agentName: CFG.agentDisplayName,
+        userName: answers.name,
+        company: answers.company
+      })
+    });
+
+    if (!sessionRes.ok) {
+      const err = await sessionRes.json().catch(() => ({}));
+      throw new Error(err.error || `Errore server (${sessionRes.status})`);
+    }
+
+    const session = await sessionRes.json();
+    orb.setState('idle');
+
+    // Costruisce gli overrides: SOLO campi che ElevenLabs ConvAI accetta
+    // tts accetta solo voiceId — speed/stability/similarityBoost NON sono override validi
+    // e causano disconnessione immediata
+    const sessionOverrides = {
+      agent: {
+        prompt: { prompt: session.effectivePrompt || answers._prompt },
+        // firstMessage rimosso: EL chiude con 1008 se non abilitato in dashboard
+        // Per abilitarlo: ConvAI → agente → Security → Allow overrides → first_message
+        // language: 'it'  stessa cosa — abilitare in Security se serve
+      }
+    };
+
+    console.log('[demo] startSession overrides:', JSON.stringify(sessionOverrides, null, 2));
+
+    convRef = await Conversation.startSession({
+      signedUrl: session.signedUrl,
+      overrides: sessionOverrides,
+      onConnect: ({ conversationId } = {}) => {
+        console.log('[demo] onConnect — conversationId:', conversationId);
+        statusText.textContent = 'Connesso';
+        badge.className = 'connected';
+        orb.setState('idle');
+        setOrbLabel('In ascolto...');
+      },
+      onDisconnect: (details) => {
+        console.log('[demo] onDisconnect — details:', details);
+        statusText.textContent = 'Chiamata terminata';
+        badge.className = '';
+        orb.setState('idle');
+        convRef = null;
+        setTimeout(() => showPostCall(session), 800);
+      },
+      onModeChange: ({ mode }) => {
+        if (mode === 'listening') {
+          orb.setState('listening');
+          badge.className = 'listening';
+          statusText.textContent = 'Ti sta ascoltando...';
+          setOrbLabel('In ascolto...');
+        } else if (mode === 'speaking') {
+          orb.setState('speaking');
+          badge.className = 'speaking';
+          statusText.textContent = 'Sta parlando...';
+          setOrbLabel('Rispondo...');
+        } else {
+          orb.setState('idle');
+          badge.className = 'connected';
+          statusText.textContent = 'Connesso';
+          setOrbLabel('In ascolto...');
+        }
+      },
+      onMessage: (msg) => {
+        const text = String(msg?.message || '').trim();
+        if (!text) return;
+        const speaker = msg?.source === 'ai' ? 'agent' : 'user';
+        addMsg(speaker, text);
+      },
+      onError: (errMsg, context) => {
+        console.error('[demo] onError:', errMsg, context);
+        toast('Errore: ' + (errMsg || 'sconosciuto'));
+        orb.setState('idle');
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    toast('Errore: ' + (err?.message || 'impossibile avviare la chiamata'));
+    showScreen('s-ready');
+    orb.setState('idle');
+  }
+}
+
+async function endCall() {
+  if (convRef) {
+    try { await convRef.endSession(); } catch(e) { console.warn(e); }
+  } else {
+    showScreen('s-postcall');
+    orb.setState('idle');
+  }
+}
+
+// ─── POST CALL ─────────────────────────────────────────────────────────────
+function showPostCall(session) {
+  orb.setState('idle');
+  setOrbLabel('Chiamata completata');
+
+  const body = document.getElementById('post-body');
+  const convId = session?.conversationId;
+
+  body.innerHTML = `
+    <p>Hai parlato con <strong>${CFG.agentDisplayName}</strong>, il tuo agente personalizzato per <em>${answers.company || 'la tua azienda'}</em>.</p>
+    <br>
+    <p>L'agente è stato configurato per affrontare: <strong>${answers.problemCustom || answers.problem || answers.sector || 'il tuo problema'}</strong>.</p>
+    ${convId ? `<br><p style="font-size:0.78rem;opacity:0.4">ID conversazione: ${convId}</p>` : ''}
+  `;
+
+  showScreen('s-postcall');
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  // Blocca se aperta come file://
+  if (location.protocol === 'file:') {
+    const b = document.getElementById('file-banner');
+    if (b) b.style.display = 'flex';
+    return;
+  }
+  // Background
+  initBg(document.getElementById('bg-c'));
+
+  // Orb
+  orb = new MorphicOrb(document.getElementById('orb-c'));
+
+  // Init progress strip
+  const strip = document.getElementById('orb-progress-strip');
+  if (strip) {
+    for (let i = 0; i < QUESTIONS.length; i++) {
+      const d = document.createElement('div');
+      d.className = 'ops-dot';
+      strip.appendChild(d);
+    }
+  }
+
+  // Welcome → Questions
+  document.getElementById('btn-start').addEventListener('click', () => {
+    orb.setState('listening');
+    setOrbLabel('Personalizzazione in corso...');
+    showScreen('s-questions');
+    renderQuestion(0);
+    setTimeout(() => orb.setState('idle'), 1200);
+  });
+
+  // Ready → Call
+  document.getElementById('btn-call').addEventListener('click', startCall);
+
+  // End call
+  document.getElementById('btn-end').addEventListener('click', endCall);
+
+  // Restart
+  document.getElementById('btn-restart').addEventListener('click', () => {
+    Object.keys(answers).forEach(k => delete answers[k]);
+    currentQ = 0;
+    convRef = null;
+    document.getElementById('transcript').innerHTML = '';
+    orb.setProgress(0);
+    orb.setState('idle');
+    setOrbLabel('Il tuo agente ti aspetta');
+    showScreen('s-welcome');
+  });
+}
+
+init();
+</script>
+</body>
+</html>
