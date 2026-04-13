@@ -22,7 +22,11 @@
   --r: 20px;
 }
 
-html, body {
+html {
+  width: 100%; height: 100%;
+  /* NON overflow:hidden qui — in Chrome clippa i position:fixed */
+}
+body {
   width: 100%; height: 100%;
   overflow: hidden;
   background: var(--bg);
@@ -41,20 +45,22 @@ html, body {
   transition: all 0.8s cubic-bezier(.4,0,.2,1);
 }
 #orb-wrap.hero {
-  width: 560px; height: 560px;
+  /* clamp: mai più grande di 88vmin → non sfora MAI il viewport */
+  width:  clamp(260px, 88vmin, 560px);
+  height: clamp(260px, 88vmin, 560px);
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
 }
-/* Nella schermata domande: più piccola e spostata in alto
-   così il q-box non la copre e non sfora dal viewport */
+/* Schermata domande: più piccola e alzata */
 #orb-wrap.hero-q {
-  width: 420px; height: 420px;
-  top: 36%; left: 50%;
+  width:  clamp(200px, 55vmin, 420px);
+  height: clamp(200px, 55vmin, 420px);
+  top: 34%; left: 50%;
   transform: translate(-50%, -50%);
 }
 #orb-wrap.mini {
-  width: 180px; height: 180px;
-  bottom: 32px; left: 50%;
+  width: 160px; height: 160px;
+  bottom: 28px; left: 50%;
   top: auto;
   transform: translateX(-50%);
 }
@@ -80,7 +86,25 @@ html, body {
 .screen.active { opacity: 1; pointer-events: all; }
 
 /* ===== WELCOME ===== */
-#s-welcome { gap: 1.6rem; text-align: center; }
+/* Contenuto nella metà inferiore — l'orb galleggia sopra */
+#s-welcome {
+  gap: 1.4rem;
+  text-align: center;
+  justify-content: flex-end;
+  padding-bottom: 7vh;
+}
+/* Gradiente scuro che risale dal basso: rende il testo leggibile
+   senza toccare la sfera in alto */
+#s-welcome::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 62%;
+  background: linear-gradient(to top, rgba(2,2,9,0.92) 30%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+#s-welcome > * { position: relative; z-index: 1; }
 
 .badge {
   display: inline-flex; align-items: center; gap: 8px;
@@ -557,6 +581,22 @@ html, body {
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Banner file:// -->
+<div id="file-banner" style="
+  display:none; position:fixed; inset:0; z-index:999;
+  background:rgba(2,2,9,0.96); backdrop-filter:blur(12px);
+  align-items:center; justify-content:center; flex-direction:column; gap:20px;
+  font-family:'Inter',sans-serif; text-align:center; padding:2rem;
+">
+  <div style="font-size:2.5rem">⚠️</div>
+  <div style="font-size:1.2rem;font-weight:700;color:#f0eeff;">Apri la pagina dal server</div>
+  <div style="font-size:0.95rem;color:rgba(240,238,255,0.55);max-width:420px;line-height:1.6;">
+    Questa demo non funziona aperta come file locale.<br>
+    Avvia il server con <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;">npm start</code>
+    e aprila su <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;">http://localhost:3000/demo</code>
+  </div>
+</div>
+
 <!-- APP -->
 <div id="app">
 
@@ -826,14 +866,20 @@ class MorphicOrb {
 
     this.clock = new THREE.Clock();
 
-    // Resize
-    window.addEventListener('resize', () => {
-      const W = this.canvas.offsetWidth;
-      const H = this.canvas.offsetHeight;
+    // Resize: aggiorna il renderer sia su window resize che su
+    // cambio dimensione CSS (es. clamp che scala con vmin)
+    const onResize = () => {
+      const W = this.canvas.offsetWidth  || this.canvas.parentElement?.offsetWidth  || 400;
+      const H = this.canvas.offsetHeight || this.canvas.parentElement?.offsetHeight || 400;
+      if (W < 1 || H < 1) return;
       this.camera.aspect = W / H;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(W, H);
-    });
+    };
+    window.addEventListener('resize', onResize);
+    if (window.ResizeObserver) {
+      new ResizeObserver(onResize).observe(this.canvas.parentElement);
+    }
   }
 
   setState(s) {
@@ -1338,6 +1384,12 @@ function showPostCall(session) {
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 function init() {
+  // Blocca se aperta come file://
+  if (location.protocol === 'file:') {
+    const b = document.getElementById('file-banner');
+    if (b) b.style.display = 'flex';
+    return;
+  }
   // Background
   initBg(document.getElementById('bg-c'));
 
